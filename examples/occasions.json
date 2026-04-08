@@ -1,0 +1,34 @@
+[
+  {
+    "occasion_id": "casual_day",
+    "text": "Easy daytime coffee run in sneakers, relaxed denim, and a white tee."
+  },
+  {
+    "occasion_id": "creative_office",
+    "text": "Creative office look with clean layers, tailored trousers, and a modern jacket."
+  },
+  {
+    "occasion_id": "business_dinner",
+    "text": "Business dinner after work with a polished blazer, dark trousers, and understated confidence."
+  },
+  {
+    "occasion_id": "wedding_guest",
+    "text": "Elegant wedding guest outfit with refined tailoring and soft evening formality."
+  },
+  {
+    "occasion_id": "black_tie",
+    "text": "Black tie gala with a tuxedo, crisp shirt, and formal evening presence."
+  },
+  {
+    "occasion_id": "streetwear_night",
+    "text": "Night-out streetwear with a hoodie, wide pants, sneakers, and a sharper urban edge."
+  },
+  {
+    "occasion_id": "summer_party",
+    "text": "Warm-weather rooftop party with breathable fabrics, clean colors, and bright energy."
+  },
+  {
+    "occasion_id": "editorial",
+    "text": "Avant-garde editorial look with dramatic layers, unusual proportions, and artistic intent."
+  }
+]
