@@ -94,7 +94,7 @@ def load_rawanalqarni(path):
 
 def load_fragrantica_clean(path):
     """Fragrantica cleaned dataset from Kaggle (olgagmiufana1)."""
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, encoding='latin-1', on_bad_lines='skip') 
     rows = []
     for _, r in df.iterrows():
         row = empty_unified()
@@ -241,7 +241,7 @@ if __name__ == "__main__":
         "rdemarqui":         "data/perfume_database.csv",
         "rawanalqarni":      "data/Perfume_Dataaset.csv",
         "fragrantica_clean": "data/fragrantica_clean.csv",
-        "ayush":             "data/perfume_dataset.csv",
+        "ayush":             "data/Perfumes_dataset.csv",
     }
 
     # only load what you actually have on disk
