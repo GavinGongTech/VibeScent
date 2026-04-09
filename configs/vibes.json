@@ -1,0 +1,133 @@
+{
+  "formal": {
+    "type": "regression",
+    "range": [0.0, 1.0],
+    "description": "Cosine similarity interpolated between formal and casual anchors. High similarity to formal anchors → score near 1.0; high similarity to casual anchors → score near 0.0.",
+    "anchors": {
+      "formal": [
+        "a person wearing a tailored suit and dress shoes at a formal event",
+        "elegant black-tie attire at a gala or award ceremony",
+        "a professional in a crisp blazer, dress shirt, and slacks",
+        "formal eveningwear such as a tuxedo or floor-length gown"
+      ],
+      "casual": [
+        "a person wearing jeans and a plain t-shirt on a relaxed day",
+        "someone dressed in a hoodie and sweatpants at home",
+        "a casual outfit with sneakers, shorts, and a graphic tee",
+        "comfortable everyday clothing like leggings and an oversized sweater"
+      ]
+    }
+  },
+
+  "season": {
+    "type": "classification",
+    "classes": {
+      "1": {
+        "label": "spring",
+        "prompts": [
+          "a light spring outfit with pastel colors and a thin jacket",
+          "spring fashion featuring floral prints and transitional layers",
+          "clothing suited for mild spring weather with light breathable fabrics"
+        ]
+      },
+      "2": {
+        "label": "summer",
+        "prompts": [
+          "a summer outfit with shorts, sandals, and a lightweight top",
+          "bright beach-ready summer wear for hot sunny weather",
+          "minimal breathable summer clothing like sundresses or linen shirts"
+        ]
+      },
+      "3": {
+        "label": "fall",
+        "prompts": [
+          "a fall outfit featuring warm earth tones, a cozy sweater, and boots",
+          "autumn fashion with layered clothing, scarves, and plaid patterns",
+          "transitional fall attire with a medium-weight jacket and warm colors"
+        ]
+      },
+      "4": {
+        "label": "winter",
+        "prompts": [
+          "a winter outfit with a heavy coat, scarf, gloves, and warm layers",
+          "cold-weather clothing including a wool coat and insulated boots",
+          "bundled-up winter fashion for freezing temperatures and snow"
+        ]
+      }
+    }
+  },
+
+  "gender": {
+    "type": "classification",
+    "classes": {
+      "0": {
+        "label": "male",
+        "prompts": [
+          "men's clothing such as trousers, a button-down shirt, or a suit",
+          "a man wearing typical masculine fashion including jeans and a polo",
+          "masculine attire designed and styled for men"
+        ]
+      },
+      "1": {
+        "label": "female",
+        "prompts": [
+          "women's clothing such as a dress, skirt, or feminine blouse",
+          "a woman wearing typical female fashion including heels and a handbag",
+          "feminine attire designed and styled for women"
+        ]
+      },
+      "2": {
+        "label": "neutral",
+        "prompts": [
+          "androgynous streetwear with clean lines, neutral tones, and an oversized silhouette",
+          "unisex outfit featuring relaxed-fit trousers, a structured jacket, and minimal accessories",
+          "gender-fluid fashion with boxy cuts, muted colors, and versatile layering pieces"
+        ]
+      }
+    }
+  },
+
+  "time": {
+    "type": "classification",
+    "classes": {
+      "0": {
+        "label": "day",
+        "prompts": [
+          "light-colored or pastel clothing in breathable natural fabrics like cotton or linen",
+          "structured practical daywear such as chinos, a polo shirt, or a casual button-down",
+          "low-key versatile outfit with subdued tones and comfortable everyday fabrics"
+        ]
+      },
+      "1": {
+        "label": "night",
+        "prompts": [
+          "a nighttime outfit for going out to bars, clubs, or evening events",
+          "dark or glamorous evening wear suited for nightlife",
+          "an outfit styled for after-dark occasions with bold or sleek aesthetics"
+        ]
+      }
+    }
+  },
+
+  "frequency": {
+    "type": "classification",
+    "classes": {
+      "0": {
+        "label": "occasional",
+        "prompts": [
+          "a special-occasion outfit worn rarely for events or celebrations",
+          "formal or unique clothing reserved for infrequent use",
+          "a standout outfit not meant for everyday wear, such as a gown or costume"
+        ]
+      },
+      "1": {
+        "label": "everyday",
+        "prompts": [
+          "comfortable practical clothing worn on a regular daily basis",
+          "a simple reliable outfit suitable for any ordinary day",
+          "go-to everyday basics like jeans, a tee, and sneakers"
+        ]
+      }
+    }
+  }
+}
