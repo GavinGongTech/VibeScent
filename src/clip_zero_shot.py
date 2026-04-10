@@ -42,6 +42,8 @@ def encode_texts(prompts: list[str], model: CLIPModel, processor: CLIPProcessor,
     """Return L2-normalised text embeddings, shape (N, D)."""
     inputs = processor(text=prompts, return_tensors="pt", padding=True, truncation=True).to(device)
     feats = model.get_text_features(**inputs)
+    if hasattr(feats, 'pooler_output'):
+        feats = feats.pooler_output
     return F.normalize(feats, dim=-1)
 
 
@@ -50,6 +52,8 @@ def encode_images(images: list[Image.Image], model: CLIPModel, processor: CLIPPr
     """Return L2-normalised image embeddings, shape (N, D)."""
     inputs = processor(images=images, return_tensors="pt").to(device)
     feats = model.get_image_features(**inputs)
+    if hasattr(feats, 'pooler_output'):
+        feats = feats.pooler_output
     return F.normalize(feats, dim=-1)
 
 
@@ -150,7 +154,7 @@ def main():
 
     # Collect image paths
     image_paths = sorted(
-        p for p in TRAIN_DIR.iterdir()
+        p for p in TRAIN_DIR.rglob("*")
         if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
     )
     print(f"Found {len(image_paths)} images in {TRAIN_DIR}")
