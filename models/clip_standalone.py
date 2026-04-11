@@ -14,7 +14,7 @@ PROJECTION_DIM = 512    # after our projector MLP (768 → 512)
 class CLIPStandalone(nn.Module):
     """Frozen CLIP ViT-L/14 image encoder with a projection MLP and 5 task heads."""
 
-    def __init__(self):
+    def __init__(self, class_weights: dict = None):
         super().__init__()
 
         clip = CLIPModel.from_pretrained(MODEL_NAME)
@@ -44,8 +44,12 @@ class CLIPStandalone(nn.Module):
         self.frequency_head = nn.Linear(PROJECTION_DIM, 2)
 
         # Loss functions
-        self._mse = nn.MSELoss()
-        self._ce  = nn.CrossEntropyLoss()
+        cw = class_weights or {}
+        self._mse          = nn.MSELoss()
+        self._ce_season    = nn.CrossEntropyLoss(weight=cw.get("season"))
+        self._ce_gender    = nn.CrossEntropyLoss(weight=cw.get("gender"))
+        self._ce_time      = nn.CrossEntropyLoss(weight=cw.get("time"))
+        self._ce_frequency = nn.CrossEntropyLoss(weight=cw.get("frequency"))
 
     def forward(self, x: torch.Tensor) -> dict:
         """
@@ -81,11 +85,11 @@ class CLIPStandalone(nn.Module):
         Returns:
             dict with total_loss and individual loss values
         """
-        formal_loss    = self._mse(output["formal"],   labels["formal"])
-        season_loss    = self._ce(output["season"],    labels["season"])
-        gender_loss    = self._ce(output["gender"],    labels["gender"])
-        time_loss      = self._ce(output["time"],      labels["time"])
-        frequency_loss = self._ce(output["frequency"], labels["frequency"])
+        formal_loss    = self._mse(output["formal"],        labels["formal"])
+        season_loss    = self._ce_season(output["season"],       labels["season"])
+        gender_loss    = self._ce_gender(output["gender"],       labels["gender"])
+        time_loss      = self._ce_time(output["time"],           labels["time"])
+        frequency_loss = self._ce_frequency(output["frequency"], labels["frequency"])
 
         total_loss = formal_loss + season_loss + gender_loss + time_loss + frequency_loss
 

@@ -6,7 +6,7 @@ from torchvision import models
 class CNNBaseline(nn.Module):
     """ResNet-50 multi-task outfit classifier with 5 label heads."""
 
-    def __init__(self):
+    def __init__(self, class_weights: dict = None):
         super().__init__()
 
         backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
@@ -27,8 +27,12 @@ class CNNBaseline(nn.Module):
                 param.requires_grad = False
 
         # Loss functions
-        self._mse  = nn.MSELoss()
-        self._ce   = nn.CrossEntropyLoss()
+        cw = class_weights or {}
+        self._mse        = nn.MSELoss()
+        self._ce_season    = nn.CrossEntropyLoss(weight=cw.get("season"))
+        self._ce_gender    = nn.CrossEntropyLoss(weight=cw.get("gender"))
+        self._ce_time      = nn.CrossEntropyLoss(weight=cw.get("time"))
+        self._ce_frequency = nn.CrossEntropyLoss(weight=cw.get("frequency"))
 
     def forward(self, x: torch.Tensor) -> dict:
         """
@@ -59,11 +63,11 @@ class CNNBaseline(nn.Module):
         Returns:
             dict with total_loss and individual loss values
         """
-        formal_loss    = self._mse(output["formal"],    labels["formal"])
-        season_loss    = self._ce(output["season"],     labels["season"])
-        gender_loss    = self._ce(output["gender"],     labels["gender"])
-        time_loss      = self._ce(output["time"],       labels["time"])
-        frequency_loss = self._ce(output["frequency"],  labels["frequency"])
+        formal_loss    = self._mse(output["formal"],        labels["formal"])
+        season_loss    = self._ce_season(output["season"],       labels["season"])
+        gender_loss    = self._ce_gender(output["gender"],       labels["gender"])
+        time_loss      = self._ce_time(output["time"],           labels["time"])
+        frequency_loss = self._ce_frequency(output["frequency"], labels["frequency"])
 
         total_loss = formal_loss + season_loss + gender_loss + time_loss + frequency_loss
 
