@@ -4,8 +4,8 @@ from sklearn.cluster import KMeans
 import joblib
 
 # Load data
-embeddings = np.load("fragrance_embeddings.npy")
-df = pd.read_csv("data/vibescent_unified.csv")
+embeddings = np.load("embeddings/fragrance_embeddings.npy")
+df = pd.read_csv("data/processed/vibescent_unified.csv")
 df = df.dropna(subset=['embedding_text', 'name']).reset_index(drop=True)
 
 # Define Cluster Model
@@ -20,10 +20,10 @@ cluster_labels = kmeans.fit_predict(embeddings)
 df['vibe_cluster_id'] = cluster_labels
 
 # Save clusters
-df.to_csv("data/vibescent_clustered.csv", index=False)
+df.to_csv("data/processed/vibescent_clustered.csv", index=False)
 
 # Save to map future vectors
-joblib.dump(kmeans, "kmeans_fragrance_model.pkl")
+joblib.dump(kmeans, "models/kmeans_fragrance_model.pkl")
 
 print("Clustering complete. Here is a sample of Cluster 42:")
 

@@ -236,11 +236,11 @@ def build_unified_dataset(dataset_paths: dict) -> pd.DataFrame:
 # ── main ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     dataset_paths = {
-        "parfumo":           "data/parfumo_data_clean.csv",
-        "rdemarqui":         "data/perfume_database.csv",
-        "rawanalqarni":      "data/Perfume_Dataaset.csv",
-        "fragrantica_clean": "data/fragrantica_clean.csv",
-        "ayush":             "data/Perfumes_dataset.csv",
+        "parfumo":           "data/raw/parfumo_data_clean.csv",
+        "rdemarqui":         "data/raw/perfume_database.csv",
+        "rawanalqarni":      "data/raw/Perfume_Dataaset.csv",
+        "fragrantica_clean": "data/raw/fragrantica_clean.csv",
+        "ayush":             "data/raw/Perfumes_dataset.csv",
     }
 
     # only load what you actually have on disk
@@ -249,7 +249,7 @@ if __name__ == "__main__":
         print("No datasets found! Update the paths in __main__.")
     else:
         df = build_unified_dataset(dataset_paths)
-        out = "data/vibescent_unified.csv"
+        out = "data/processed/vibescent_unified.csv"
         df.to_csv(out, index=False)
         print(f"\n✅ Saved {len(df)} fragrances → {out}")
         print(f"Columns: {list(df.columns)}")

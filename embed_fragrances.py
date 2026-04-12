@@ -4,8 +4,8 @@ from sentence_transformers import SentenceTransformer
 from sklearn.neighbors import NearestNeighbors
 
 # Load the dataset
-dataset_path = 'data/vibescent_unified.csv'
-df = pd.read_csv(dataset_path)
+dataset_filename = 'data/processed/vibescent_unified.csv'
+df = pd.read_csv(dataset_filename)
 
 # Drop rows where we can't encode anything or don't know the name.
 df = df.dropna(subset=['embedding_text', 'name'])
@@ -20,7 +20,7 @@ print("Encoding pre-compiled text descriptions into vectors...")
 embeddings = model.encode(df['embedding_text'].tolist(), show_progress_bar=True)
 
 # Store as npy
-output_filename = "fragrance_embeddings.npy"
+output_filename = "embeddings/fragrance_embeddings.npy"
 np.save(output_filename, embeddings)
 print(f"Saved {embeddings.shape[0]} embeddings with dimension {embeddings.shape[1]} to {output_filename}")
 
