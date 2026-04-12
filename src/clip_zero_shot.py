@@ -65,13 +65,7 @@ def build_prompt_embeddings(vibes: dict, model: CLIPModel, processor: CLIPProces
     """
     Returns a dict with pre-computed text embeddings for every dimension.
 
-    formal:
-        {
-            "formal_embs": Tensor (4, D),   # averaged → (1, D) at score time
-            "casual_embs": Tensor (4, D),
-        }
-
-    classification dims (season / gender / time / frequency):
+    All dims (formal / season / gender / time / frequency) are classification:
         {
             class_id: Tensor (num_prompts, D),
             ...
@@ -79,15 +73,7 @@ def build_prompt_embeddings(vibes: dict, model: CLIPModel, processor: CLIPProces
     """
     embeddings = {}
 
-    # --- formal (regression) ---
-    cfg = vibes["formal"]["anchors"]
-    embeddings["formal"] = {
-        "formal_embs": encode_texts(cfg["formal"], model, processor, device),
-        "casual_embs":  encode_texts(cfg["casual"],  model, processor, device),
-    }
-
-    # --- classification dims ---
-    for dim in ("season", "gender", "time", "frequency"):
+    for dim in ("formal", "season", "gender", "time", "frequency"):
         embeddings[dim] = {}
         for class_id, info in vibes[dim]["classes"].items():
             embeddings[dim][class_id] = encode_texts(info["prompts"], model, processor, device)
@@ -98,23 +84,6 @@ def build_prompt_embeddings(vibes: dict, model: CLIPModel, processor: CLIPProces
 # ---------------------------------------------------------------------------
 # Per-image scoring
 # ---------------------------------------------------------------------------
-
-def score_formal(img_embs: torch.Tensor, embs: dict) -> list[float]:
-    """
-    For each image embedding in img_embs (B, D), compute a 0-1 formality score.
-    sim_formal = mean cosine sim with formal anchors
-    sim_casual = mean cosine sim with casual anchors
-    score = sim_formal / (sim_formal + sim_casual)   (softmax-style interpolation)
-    """
-    # (B, 4) → mean over anchors → (B,)
-    sim_formal = (img_embs @ embs["formal_embs"].T).mean(dim=-1)
-    sim_casual = (img_embs @ embs["casual_embs"].T).mean(dim=-1)
-
-    # shift to [0,1] via softmax-style normalisation so negatives are handled
-    stack = torch.stack([sim_formal, sim_casual], dim=-1)   # (B, 2)
-    probs = F.softmax(stack, dim=-1)                        # (B, 2)
-    return probs[:, 0].tolist()                             # formality probability
-
 
 def score_classification(img_embs: torch.Tensor, class_embs: dict) -> list[int]:
     """
@@ -181,7 +150,7 @@ def main():
 
         img_embs = encode_images(images, model, processor, device)   # (B, D)
 
-        formal_scores    = score_formal(img_embs, prompt_embs["formal"])
+        formal_labels    = score_classification(img_embs, prompt_embs["formal"])
         season_labels    = score_classification(img_embs, prompt_embs["season"])
         gender_labels    = score_classification(img_embs, prompt_embs["gender"])
         time_labels      = score_classification(img_embs, prompt_embs["time"])
@@ -189,7 +158,7 @@ def main():
 
         for i, path in enumerate(valid_paths):
             results[path.name] = {
-                "formal":    round(formal_scores[i], 4),
+                "formal":    formal_labels[i],
                 "season":    season_labels[i],
                 "gender":    gender_labels[i],
                 "time":      time_labels[i],

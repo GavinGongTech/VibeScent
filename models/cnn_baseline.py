@@ -6,7 +6,7 @@ from torchvision import models
 class CNNBaseline(nn.Module):
     """ResNet-50 multi-task outfit classifier with 5 label heads."""
 
-    def __init__(self, class_weights: dict = None):
+    def __init__(self, class_weights: dict = None, dropout: float = 0.5):
         super().__init__()
 
         backbone = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
@@ -14,8 +14,12 @@ class CNNBaseline(nn.Module):
         # Drop the original FC layer; keep everything up to the global avg pool
         self.backbone = nn.Sequential(*list(backbone.children())[:-1])  # output: (B, 2048, 1, 1)
 
+        # Dropout before heads — regularises the shared 2048-d representation
+        # Pair with weight_decay=1e-4 in the Adam optimizer for best effect
+        self.dropout = nn.Dropout(dropout)
+
         # 5 task heads
-        self.formal_head    = nn.Linear(2048, 1)
+        self.formal_head    = nn.Linear(2048, 3)
         self.season_head    = nn.Linear(2048, 4)
         self.gender_head    = nn.Linear(2048, 3)
         self.time_head      = nn.Linear(2048, 2)
@@ -28,7 +32,7 @@ class CNNBaseline(nn.Module):
 
         # Loss functions
         cw = class_weights or {}
-        self._mse        = nn.MSELoss()
+        self._ce_formal    = nn.CrossEntropyLoss(weight=cw.get("formal"))
         self._ce_season    = nn.CrossEntropyLoss(weight=cw.get("season"))
         self._ce_gender    = nn.CrossEntropyLoss(weight=cw.get("gender"))
         self._ce_time      = nn.CrossEntropyLoss(weight=cw.get("time"))
@@ -41,10 +45,10 @@ class CNNBaseline(nn.Module):
         Returns:
             dict with keys: formal, season, gender, time, frequency
         """
-        feats = self.backbone(x).flatten(1)   # (B, 2048)
+        feats = self.dropout(self.backbone(x).flatten(1))   # (B, 2048)
 
         return {
-            "formal":    self.formal_head(feats).squeeze(1),   # (B,)
+            "formal":    self.formal_head(feats),               # (B, 3)
             "season":    self.season_head(feats),               # (B, 4)
             "gender":    self.gender_head(feats),               # (B, 3)
             "time":      self.time_head(feats),                 # (B, 2)
@@ -63,7 +67,7 @@ class CNNBaseline(nn.Module):
         Returns:
             dict with total_loss and individual loss values
         """
-        formal_loss    = self._mse(output["formal"],        labels["formal"])
+        formal_loss    = self._ce_formal(output["formal"],      labels["formal"])
         season_loss    = self._ce_season(output["season"],       labels["season"])
         gender_loss    = self._ce_gender(output["gender"],       labels["gender"])
         time_loss      = self._ce_time(output["time"],           labels["time"])

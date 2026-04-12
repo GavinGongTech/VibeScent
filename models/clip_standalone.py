@@ -37,7 +37,7 @@ class CLIPStandalone(nn.Module):
         )
 
         # 5 task heads
-        self.formal_head    = nn.Linear(PROJECTION_DIM, 1)
+        self.formal_head    = nn.Linear(PROJECTION_DIM, 3)
         self.season_head    = nn.Linear(PROJECTION_DIM, 4)
         self.gender_head    = nn.Linear(PROJECTION_DIM, 3)
         self.time_head      = nn.Linear(PROJECTION_DIM, 2)
@@ -45,7 +45,7 @@ class CLIPStandalone(nn.Module):
 
         # Loss functions
         cw = class_weights or {}
-        self._mse          = nn.MSELoss()
+        self._ce_formal    = nn.CrossEntropyLoss(weight=cw.get("formal"))
         self._ce_season    = nn.CrossEntropyLoss(weight=cw.get("season"))
         self._ce_gender    = nn.CrossEntropyLoss(weight=cw.get("gender"))
         self._ce_time      = nn.CrossEntropyLoss(weight=cw.get("time"))
@@ -66,7 +66,7 @@ class CLIPStandalone(nn.Module):
         proj = self.projector(clip_feats)   # (B, 512)
 
         return {
-            "formal":    self.formal_head(proj).squeeze(1),   # (B,)
+            "formal":    self.formal_head(proj),               # (B, 3)
             "season":    self.season_head(proj),               # (B, 4)
             "gender":    self.gender_head(proj),               # (B, 3)
             "time":      self.time_head(proj),                 # (B, 2)
@@ -85,7 +85,7 @@ class CLIPStandalone(nn.Module):
         Returns:
             dict with total_loss and individual loss values
         """
-        formal_loss    = self._mse(output["formal"],        labels["formal"])
+        formal_loss    = self._ce_formal(output["formal"],      labels["formal"])
         season_loss    = self._ce_season(output["season"],       labels["season"])
         gender_loss    = self._ce_gender(output["gender"],       labels["gender"])
         time_loss      = self._ce_time(output["time"],           labels["time"])

@@ -1,21 +1,31 @@
 {
   "formal": {
-    "type": "regression",
-    "range": [0.0, 1.0],
-    "description": "Cosine similarity interpolated between formal and casual anchors. High similarity to formal anchors → score near 1.0; high similarity to casual anchors → score near 0.0.",
-    "anchors": {
-      "formal": [
-        "a person wearing a tailored suit and dress shoes at a formal event",
-        "elegant black-tie attire at a gala or award ceremony",
-        "a professional in a crisp blazer, dress shirt, and slacks",
-        "formal eveningwear such as a tuxedo or floor-length gown"
-      ],
-      "casual": [
-        "a person wearing jeans and a plain t-shirt on a relaxed day",
-        "someone dressed in a hoodie and sweatpants at home",
-        "a casual outfit with sneakers, shorts, and a graphic tee",
-        "comfortable everyday clothing like leggings and an oversized sweater"
-      ]
+    "type": "classification",
+    "classes": {
+      "0": {
+        "label": "casual",
+        "prompts": [
+          "a person in ripped jeans and a graphic tee with sneakers",
+          "someone in sweatpants and a hoodie running errands",
+          "a relaxed weekend outfit with shorts and sandals"
+        ]
+      },
+      "1": {
+        "label": "smart casual",
+        "prompts": [
+          "a person in chinos and a button down shirt with loafers",
+          "a smart casual outfit with dark jeans and a blazer",
+          "a neat polished look with trousers and a tucked in shirt"
+        ]
+      },
+      "2": {
+        "label": "formal",
+        "prompts": [
+          "a person in a tailored suit and tie at a business meeting",
+          "a woman in a floor length gown at a black tie event",
+          "formal eveningwear including a tuxedo or cocktail dress"
+        ]
+      }
     }
   },
 
@@ -115,17 +125,17 @@
       "0": {
         "label": "occasional",
         "prompts": [
-          "a special-occasion outfit worn rarely for events or celebrations",
-          "formal or unique clothing reserved for infrequent use",
-          "a standout outfit not meant for everyday wear, such as a gown or costume"
+          "an elaborate sequined gown or tuxedo worn to a special event",
+          "a costume or highly decorative outfit not suitable for daily wear",
+          "formal eveningwear like a floor length dress with jewelry"
         ]
       },
       "1": {
         "label": "everyday",
         "prompts": [
-          "comfortable practical clothing worn on a regular daily basis",
-          "a simple reliable outfit suitable for any ordinary day",
-          "go-to everyday basics like jeans, a tee, and sneakers"
+          "simple jeans and a t-shirt for a regular day",
+          "a basic outfit of chinos and a plain shirt for running errands",
+          "comfortable everyday clothing worn to school or work"
         ]
       }
     }

@@ -55,7 +55,7 @@ class CNNCLIPHybrid(nn.Module):
         )
 
         # ── Task heads ────────────────────────────────────────────────────────
-        self.formal_head    = nn.Linear(MLP_DIM, 1)
+        self.formal_head    = nn.Linear(MLP_DIM, 3)
         self.season_head    = nn.Linear(MLP_DIM, 4)
         self.gender_head    = nn.Linear(MLP_DIM, 3)
         self.time_head      = nn.Linear(MLP_DIM, 2)
@@ -63,7 +63,7 @@ class CNNCLIPHybrid(nn.Module):
 
         # Loss functions
         cw = class_weights or {}
-        self._mse          = nn.MSELoss()
+        self._ce_formal    = nn.CrossEntropyLoss(weight=cw.get("formal"))
         self._ce_season    = nn.CrossEntropyLoss(weight=cw.get("season"))
         self._ce_gender    = nn.CrossEntropyLoss(weight=cw.get("gender"))
         self._ce_time      = nn.CrossEntropyLoss(weight=cw.get("time"))
@@ -86,7 +86,7 @@ class CNNCLIPHybrid(nn.Module):
         fused = self.fusion(torch.cat([cnn_feats, clip_feats], dim=1))
 
         return {
-            "formal":    self.formal_head(fused).squeeze(1),   # (B,)
+            "formal":    self.formal_head(fused),               # (B, 3)
             "season":    self.season_head(fused),               # (B, 4)
             "gender":    self.gender_head(fused),               # (B, 3)
             "time":      self.time_head(fused),                 # (B, 2)
@@ -105,7 +105,7 @@ class CNNCLIPHybrid(nn.Module):
         Returns:
             dict with total_loss and individual loss values
         """
-        formal_loss    = self._mse(output["formal"],        labels["formal"])
+        formal_loss    = self._ce_formal(output["formal"],      labels["formal"])
         season_loss    = self._ce_season(output["season"],       labels["season"])
         gender_loss    = self._ce_gender(output["gender"],       labels["gender"])
         time_loss      = self._ce_time(output["time"],           labels["time"])

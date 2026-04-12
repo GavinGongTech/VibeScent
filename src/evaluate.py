@@ -12,7 +12,6 @@ from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
     f1_score,
-    mean_absolute_error,
 )
 from torch.utils.data import DataLoader
 
@@ -28,8 +27,9 @@ PLOTS_DIR = ROOT / "outputs" / "plots"
 METRICS_PATH = ROOT / "outputs" / "metrics.json"
 LOGS_DIR = ROOT / "logs"
 
-CLASS_DIMS = ["season", "gender", "time", "frequency"]
+CLASS_DIMS = ["formal", "season", "gender", "time", "frequency"]
 CLASS_LABELS = {
+    "formal":    ["casual", "smart casual", "formal"],
     "season":    ["spring", "summer", "fall", "winter"],
     "gender":    ["male", "female", "neutral"],
     "time":      ["day", "night"],
@@ -81,11 +81,7 @@ def run_inference(model, loader, device) -> dict:
         images = images.to(device)
         output = model(images)
 
-        # formal
-        preds["formal"].extend(output["formal"].cpu().tolist())
-        gts["formal"].extend(labels["formal"].tolist())
-
-        # classification: argmax
+        # all dims are classification: argmax
         for dim in CLASS_DIMS:
             preds[dim].extend(output[dim].argmax(dim=1).cpu().tolist())
             gts[dim].extend(labels[dim].tolist())
@@ -101,15 +97,6 @@ def compute_metrics(results: dict) -> dict:
     preds, gts = results["preds"], results["gts"]
     metrics = {}
 
-    # formal
-    p = np.array(preds["formal"])
-    g = np.array(gts["formal"])
-    metrics["formal"] = {
-        "MAE":  float(mean_absolute_error(g, p)),
-        "RMSE": float(np.sqrt(np.mean((p - g) ** 2))),
-    }
-
-    # classification dims
     for dim in CLASS_DIMS:
         p = np.array(preds[dim])
         g = np.array(gts[dim])
@@ -174,30 +161,6 @@ def plot_confusion_matrices(results_by_model: dict):
             plt.close(fig)
 
 
-def plot_formal_scatter(results_by_model: dict):
-    """Scatter: predicted vs actual formal score per model."""
-    n = len(results_by_model)
-    fig, axes = plt.subplots(1, n, figsize=(5 * n, 4), sharey=True)
-    if n == 1:
-        axes = [axes]
-
-    for ax, (model_name, results) in zip(axes, results_by_model.items()):
-        g = np.array(results["gts"]["formal"])
-        p = np.array(results["preds"]["formal"])
-        ax.scatter(g, p, alpha=0.3, s=8)
-        ax.plot([0, 1], [0, 1], "r--", linewidth=1)
-        ax.set_xlabel("Actual")
-        ax.set_ylabel("Predicted")
-        ax.set_title(model_name)
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-
-    fig.suptitle("Formal Score: Predicted vs Actual")
-    fig.tight_layout()
-    fig.savefig(PLOTS_DIR / "formal_scatter.png", dpi=150)
-    plt.close(fig)
-
-
 def plot_loss_curves(model_names: list):
     """Training and val loss curves from logs/{model}_losses.json."""
     for model_name in model_names:
@@ -237,14 +200,6 @@ def print_summary(all_metrics: dict):
     print(f"{'Attribute':<14}" + "".join(f"{m:>{col_w}}" for m in model_names))
     print("=" * (14 + col_w * len(model_names)))
 
-    # formal
-    for metric in ("MAE", "RMSE"):
-        row = f"{'formal ' + metric:<14}"
-        for m in model_names:
-            row += f"{all_metrics[m]['formal'][metric]:>{col_w}.4f}"
-        print(row)
-
-    # classification
     for dim in CLASS_DIMS:
         for metric in ("accuracy", "macro_f1"):
             row = f"{dim + ' ' + metric:<14}"
@@ -309,7 +264,7 @@ def main():
     print("\nGenerating plots ...")
     plot_accuracy_bars(all_metrics, list(all_metrics.keys()))
     plot_confusion_matrices(results_by_model)
-    plot_formal_scatter(results_by_model)
+
     plot_loss_curves(args.models)
     print(f"Plots saved → {PLOTS_DIR}")
 

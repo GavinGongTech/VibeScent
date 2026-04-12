@@ -73,7 +73,7 @@ class FashionpediaDataset(Dataset):
         })
 
         labels = {
-            'formal':    torch.tensor(label_dict['formal'],     dtype=torch.float32),
+            'formal':    torch.tensor(label_dict['formal'],     dtype=torch.long),
             'season':    torch.tensor(label_dict['season'] - 1, dtype=torch.long),
             'gender':    torch.tensor(label_dict['gender'],     dtype=torch.long),
             'time':      torch.tensor(label_dict['time'],       dtype=torch.long),
