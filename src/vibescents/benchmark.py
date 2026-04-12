@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from statistics import mean
 from typing import Iterable
 
@@ -65,23 +66,34 @@ class BenchmarkGenerator:
         from google.genai import types
 
         drafts: list[BenchmarkCaseDraft] = []
-        for _ in range(runs):
-            response = self._client.models.generate_content(
-                model=self.settings.reranker_model,
-                contents=f"case_id: {case_id}\nbrief: {brief}",
-                config=types.GenerateContentConfig(
-                    system_instruction=BENCHMARK_PROMPT,
-                    response_mime_type="application/json",
-                    response_schema=BenchmarkCaseLabel,
-                ),
-            )
-            parsed = getattr(response, "parsed", None)
-            label = (
-                parsed
-                if isinstance(parsed, BenchmarkCaseLabel)
-                else BenchmarkCaseLabel.model_validate(parsed)
-                if parsed is not None
-                else BenchmarkCaseLabel.model_validate_json(response.text)
-            )
-            drafts.append(BenchmarkCaseDraft(case_id=case_id, brief=brief, labels=label))
+        for run_idx in range(runs):
+            for attempt in range(5):
+                try:
+                    response = self._client.models.generate_content(
+                        model=self.settings.reranker_model,
+                        contents=f"case_id: {case_id}\nbrief: {brief}",
+                        config=types.GenerateContentConfig(
+                            system_instruction=BENCHMARK_PROMPT,
+                            response_mime_type="application/json",
+                            response_schema=BenchmarkCaseLabel,
+                        ),
+                    )
+                    parsed = getattr(response, "parsed", None)
+                    label = (
+                        parsed
+                        if isinstance(parsed, BenchmarkCaseLabel)
+                        else BenchmarkCaseLabel.model_validate(parsed)
+                        if parsed is not None
+                        else BenchmarkCaseLabel.model_validate_json(response.text)
+                    )
+                    drafts.append(BenchmarkCaseDraft(case_id=case_id, brief=brief, labels=label))
+                    break
+                except Exception as e:
+                    if attempt < 4 and ("429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)):
+                        wait = min(30 * (attempt + 1), 120)
+                        print(f"  Rate limited on {case_id} run {run_idx + 1}, waiting {wait}s...")
+                        time.sleep(wait)
+                    else:
+                        raise
+            time.sleep(2)
         return drafts

@@ -48,7 +48,7 @@ Deliver branch artifacts that can be integrated:
 - fragrance descriptions generated
 - occasion text retrieval working
 - image retrieval working
-- `gemini-embedding-2-preview` retrieval working
+- `gemini-embedding-2` retrieval working
 - branch-level sanity checks completed
 
 ### Week 3
@@ -58,7 +58,6 @@ Integrate the branches and benchmark the full system:
 - late-fusion baseline working end to end
 - 20-case benchmark created
 - reranker added on top of baseline
-- ablation with and without `gemini-embedding-2-preview` completed
 - baseline versus reranker comparison completed
 
 ### Week 4
@@ -111,7 +110,6 @@ Some of these may be inferred if the raw dataset does not provide them directly.
 - richer text generation may introduce noise if not schema-controlled
 - AI-assisted evaluation can become circular if the same model both writes and grades the benchmark
 - the reranker can become impressive-looking but unmeasured if the benchmark is weak
-- preview-model behavior or quotas may shift, so fallback paths must remain runnable
 
 ## Non-Negotiables
 
@@ -120,3 +118,4 @@ Some of these may be inferred if the raw dataset does not provide them directly.
 - separate retrieval text from display text
 - preserve interpretable fragrance metadata
 - document every model choice and fallback
+model choice and fallback

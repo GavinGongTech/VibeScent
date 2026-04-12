@@ -3,7 +3,7 @@
 Harsh's branch owns:
 
 - text embeddings with `gemini-embedding-001`
-- multimodal embedding retrieval with `gemini-embedding-2-preview`
+- multimodal embedding retrieval with `gemini-embedding-2`
 - reranking with `gemini-3.1-pro-preview`
 - benchmark generation utilities
 
@@ -93,7 +93,7 @@ uv run vibescents generate-benchmark \
 Primary retrieval signals:
 
 - `gemini-embedding-001` text score
-- `gemini-embedding-2-preview` shared-space multimodal score
+- `gemini-embedding-2` shared-space multimodal score
 - Neil's CLIP/CNN/hybrid image score
 - structured metadata score
 
@@ -104,15 +104,6 @@ final_score =
   0.30 * text_score +
   0.25 * multimodal_score +
   0.30 * image_score +
-  0.15 * structured_score
-```
-
-Fallback fusion rule if `gemini-embedding-2-preview` is unavailable:
-
-```text
-final_score =
-  0.45 * text_score +
-  0.40 * image_score +
   0.15 * structured_score
 ```
 
@@ -129,4 +120,6 @@ Run local tests for the non-API utilities:
 
 ```bash
 uv run pytest
+```
+ pytest
 ```

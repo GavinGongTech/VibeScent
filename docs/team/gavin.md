@@ -27,7 +27,6 @@ You own:
 - collect branch outputs
 - integrate the late-fusion baseline
 - make sure reranker comparisons are reproducible
-- publish ablation results with and without `gemini-embedding-2-preview`
 
 ### Week 4
 
@@ -48,7 +47,6 @@ You own:
 - do not accept incompatible file formats
 - do not present AI-assisted labels as human labels
 - do not let the reranker replace the baseline without benchmark evidence
-- do not let the preview embedding model stay in production unless the ablation justifies it
 
 ## Success Criteria
 

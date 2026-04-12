@@ -165,6 +165,7 @@ def enrich_dataframe(
     *,
     max_rows: int | None = None,
     resume_from: int = 0,
+    checkpoint_path: str | None = None,
 ) -> pd.DataFrame:
     """Enrich a fragrance dataframe with LLM-generated attributes."""
     settings = Settings.from_env()
@@ -233,6 +234,8 @@ def enrich_dataframe(
         print(f"  [{done}/{total}] processed={processed} failed={failed}")
 
         if batch_end < total:
+            if checkpoint_path:
+                work.to_csv(checkpoint_path, index=False)
             time.sleep(DELAY_BETWEEN_BATCHES)
 
     print(f"\nEnrichment complete: {processed} ok, {failed} failed out of {total}")
@@ -285,7 +288,12 @@ def main() -> None:
         print(f"Added fragrance_id column (0 to {len(df)-1})")
 
     print(f"Enriching {args.max_rows or len(df)} rows starting from {args.resume_from}...")
-    enriched = enrich_dataframe(df, max_rows=args.max_rows, resume_from=args.resume_from)
+    enriched = enrich_dataframe(
+        df,
+        max_rows=args.max_rows,
+        resume_from=args.resume_from,
+        checkpoint_path=args.output_csv + ".ckpt",
+    )
 
     print("Building retrieval_text...")
     enriched = build_retrieval_text(enriched)

@@ -111,7 +111,7 @@ Report all of the following:
 - multimodal embedding retrieval performance
 - late-fusion baseline performance
 - reranked performance
-- with and without `gemini-embedding-2-preview`
+- with and without `gemini-embedding-2`
 - benchmark cases where reranking helps
 - benchmark cases where reranking hurts
 

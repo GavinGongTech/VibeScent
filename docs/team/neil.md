@@ -26,7 +26,7 @@ You own:
 
 - integrate the winning image branch into the late-fusion baseline
 - compare image-only versus fused retrieval
-- compare CLIP/CNN/hybrid behavior against the shared-space `gemini-embedding-2-preview` signal
+- compare CLIP/CNN/hybrid behavior against the shared-space `gemini-embedding-2` signal
 
 ## Model Choices
 

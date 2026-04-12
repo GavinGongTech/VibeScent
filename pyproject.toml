@@ -11,12 +11,19 @@ dependencies = [
   "pandas",
   "pillow",
   "pydantic>=2",
+  "voyageai",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest",
   "ruff",
+]
+gpu = [
+  "torch>=2.0.0",
+  "transformers>=4.57.0",
+  "qwen-vl-utils>=0.0.14",
+  "accelerate>=0.26.0",
 ]
 
 [project.scripts]

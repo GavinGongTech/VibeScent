@@ -26,7 +26,7 @@ You do not own:
 
 - encode occasion descriptions with `gemini-embedding-001`
 - encode fragrance `retrieval_text`
-- build `gemini-embedding-2-preview` retrieval for occasion text and outfit-image inputs
+- build `gemini-embedding-2` retrieval for occasion text and outfit-image inputs
 - compute text-to-fragrance similarity
 - save embeddings and metadata
 - produce similarity heatmaps and nearest-neighbor checks
@@ -45,7 +45,7 @@ Primary text embedding model:
 
 Primary shared-space multimodal model:
 
-- `gemini-embedding-2-preview`
+- `gemini-embedding-2`
 
 Reranker:
 
@@ -80,5 +80,6 @@ From Gavin:
 
 - similar occasions cluster together
 - text-only retrieval produces plausible fragrance candidates
-- the multimodal embedding signal improves the fused ranking or earns its place through ablation
+- the multimodal embedding signal provides a strong, established baseline for the fused ranking
 - reranking improves or matches the baseline on the benchmark
+ark

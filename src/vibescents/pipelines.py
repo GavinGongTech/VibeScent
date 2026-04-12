@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from vibescents.embeddings import GeminiEmbedder
+from vibescents.embeddings import GeminiEmbedder, Qwen3VLMultimodalEmbedder, VoyageEmbedder
 from vibescents.io_utils import dump_json, ensure_dir, save_dataframe, save_embeddings
 from vibescents.schemas import RetrievalCandidate
 from vibescents.similarity import cosine_similarity_matrix, top_k_indices
@@ -18,12 +18,12 @@ def embed_text_frame(
     text_column: str,
     output_dir: str | Path,
     model: str | None = None,
-    task_type: str = "RETRIEVAL_DOCUMENT",
+    input_type: str = "document",
 ) -> np.ndarray:
-    embedder = GeminiEmbedder()
+    embedder = VoyageEmbedder()
     output_path = ensure_dir(Path(output_dir))
     texts = frame[text_column].fillna("").astype(str).tolist()
-    embeddings = embedder.embed_texts(texts, model=model, task_type=task_type)
+    embeddings = embedder.embed_texts(texts, model=model, input_type=input_type)
     metadata = frame[[id_column, text_column]].copy()
     save_embeddings(output_path / "embeddings.npy", embeddings)
     save_dataframe(output_path / "metadata.csv", metadata)
@@ -36,10 +36,10 @@ def embed_occasions(
     output_dir: str | Path,
 ) -> np.ndarray:
     output_path = ensure_dir(Path(output_dir))
-    embedder = GeminiEmbedder()
+    embedder = VoyageEmbedder()
     texts = [item["text"] for item in occasions]
     ids = [item["occasion_id"] for item in occasions]
-    embeddings = embedder.embed_texts(texts, task_type="RETRIEVAL_QUERY")
+    embeddings = embedder.embed_texts(texts, input_type="query")
     similarity = cosine_similarity_matrix(embeddings)
 
     metadata = pd.DataFrame({"occasion_id": ids, "text": texts})
@@ -63,7 +63,7 @@ def retrieve_with_multimodal_query(
     top_k: int = 10,
 ) -> list[RetrievalCandidate]:
     output_path = ensure_dir(Path(output_dir))
-    embedder = GeminiEmbedder()
+    embedder = Qwen3VLMultimodalEmbedder()
     doc_embeddings = embedder.embed_multimodal_documents(frame[text_column].fillna("").astype(str).tolist())
     query_embedding = embedder.embed_multimodal_query(text=occasion_text, image_path=image_path)
     scores = cosine_similarity_matrix(query_embedding, doc_embeddings)[0]

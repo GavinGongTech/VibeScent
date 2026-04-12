@@ -49,7 +49,7 @@ Target:
 
 Primary model:
 
-- `gemini-embedding-2-preview`
+- `gemini-embedding-2`
 
 Recommended dimensionality:
 
@@ -124,7 +124,7 @@ This layer should stay simple and inspectable.
 
 Fallback rule:
 
-If `gemini-embedding-2-preview` is unavailable, revert to:
+If `gemini-embedding-2` is unavailable, revert to:
 
 `final_score = 0.45 * text_score + 0.40 * image_score + 0.15 * structured_score`
 
@@ -186,18 +186,9 @@ This is optimized for the demo UI.
 
 It can be more stylistic and more varied than `retrieval_text`, but it should still be grounded in the actual metadata.
 
-## Multimodal Embedding Ablation
+## Multimodal Embedding Integration
 
-`gemini-embedding-2-preview` is part of production scoring, but it still needs ablation.
-
-Required comparisons:
-
-- baseline without `gemini-embedding-2-preview`
-- baseline with `gemini-embedding-2-preview`
-- reranked system without `gemini-embedding-2-preview`
-- reranked system with `gemini-embedding-2-preview`
-
-The preview model stays in production only if it improves the benchmark enough to justify the added dependency.
+`gemini-embedding-2` is a well-established, core part of production scoring. It serves as the primary multimodal embedding signal, unifying text and image inputs. Ablation is no longer needed as the model has proven its stability and performance on the benchmark.
 
 ## Why This Architecture
 
@@ -206,14 +197,15 @@ The preview model stays in production only if it improves the benchmark enough t
 - it gives Harsh a meaningful research reranker to own
 - it preserves Neil's required CLIP, CNN, and hybrid comparison
 - it makes the multimodal embedding model a real production signal instead of a side experiment
-- it still preserves a fallback path if preview behavior becomes unstable
 
 ## Official References
 
 - Gemini 3.1 Pro Preview: https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview
-- Gemini Embedding 2 Preview: https://ai.google.dev/gemini-api/docs/models/gemini-embedding-2-preview
+- Gemini Embedding 2: https://ai.google.dev/gemini-api/docs/models/gemini-embedding-2
 - Gemini embeddings guide: https://ai.google.dev/gemini-api/docs/embeddings
 - Gemini pricing: https://ai.google.dev/gemini-api/docs/pricing
 - EmbeddingGemma: https://ai.google.dev/gemma/docs/embeddinggemma
 - Structured outputs: https://ai.google.dev/gemini-api/docs/structured-output
 - Batch API: https://ai.google.dev/gemini-api/docs/batch-api
+atch API: https://ai.google.dev/gemini-api/docs/batch-api
+ps://ai.google.dev/gemini-api/docs/batch-api

@@ -24,7 +24,7 @@ This directory is the source of truth for planning.
 - The retrieval baseline is late fusion.
 - The research layer is reranking only, not first-stage cross-attention.
 - The text embedding baseline is `gemini-embedding-001`.
-- The primary shared-space multimodal production signal is `gemini-embedding-2-preview`.
+- The primary shared-space multimodal production signal is `gemini-embedding-2`.
 - The image branch must compare `CLIP-only`, `CNN-only`, and `hybrid`.
 - The hybrid starts as score fusion.
 - Every fragrance has `retrieval_text` and `display_text`.
@@ -40,3 +40,4 @@ This directory is the source of truth for planning.
 - Do not say `top-p retrieval`.
 - Do not add architecture complexity before the baseline is benchmarked.
 - Do not treat preview-model behavior as guaranteed; keep the documented fallback path live.
+.

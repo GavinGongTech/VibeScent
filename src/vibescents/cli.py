@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     embed_csv.add_argument("--text-column", required=True)
     embed_csv.add_argument("--output-dir", required=True)
     embed_csv.add_argument("--model")
-    embed_csv.add_argument("--task-type", default="RETRIEVAL_DOCUMENT")
+    embed_csv.add_argument("--input-type", default="document", help="Voyage input_type: 'document' or 'query'")
 
     embed_occasions_parser = subparsers.add_parser("embed-occasions")
     embed_occasions_parser.add_argument("--input-json", required=True)
@@ -45,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--briefs-json", required=True)
     benchmark.add_argument("--output-json", required=True)
     benchmark.add_argument("--runs", type=int, default=3)
+    benchmark.add_argument("--model", default=None, help="Override the generation model (default: settings.reranker_model)")
 
     return parser
 
@@ -60,7 +61,7 @@ def main() -> None:
             text_column=args.text_column,
             output_dir=args.output_dir,
             model=args.model,
-            task_type=args.task_type,
+            input_type=args.input_type,
         )
         return
 
@@ -97,7 +98,11 @@ def main() -> None:
 
     if args.command == "generate-benchmark":
         briefs = load_json(args.briefs_json)
-        generator = BenchmarkGenerator()
+        settings = None
+        if args.model:
+            from vibescents.settings import Settings
+            settings = Settings(api_key=Settings.from_env().api_key, reranker_model=args.model)
+        generator = BenchmarkGenerator(settings=settings)
         consolidated = []
         for item in briefs:
             drafts = generator.generate_case_labels(
