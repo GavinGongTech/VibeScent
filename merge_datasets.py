@@ -235,7 +235,6 @@ def build_unified_dataset(dataset_paths: dict) -> pd.DataFrame:
 
 # ── main ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # *** EDIT THESE PATHS to wherever you downloaded each CSV ***
     dataset_paths = {
         "parfumo":           "data/parfumo_data_clean.csv",
         "rdemarqui":         "data/perfume_database.csv",
