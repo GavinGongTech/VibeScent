@@ -11,13 +11,20 @@ df = pd.read_csv(dataset_filename)
 df = df.dropna(subset=['embedding_text', 'name'])
 df = df.reset_index(drop=True)
 
-# Encoding
-encoder_model_name = 'all-MiniLM-L6-v2' 
-print(f"Loading encoder: {encoder_model_name}...")
-model = SentenceTransformer(encoder_model_name)
-
+# Embedding
+embedding_model_name = 'Qwen/Qwen3-Embedding-8B' 
+print(f"Loading encoder: {embedding_model_name}...")
+model = SentenceTransformer(
+    embedding_model_name, 
+    trust_remote_code=True,
+    model_kwargs={'torch_dtype': 'auto'}
+)
 print("Encoding pre-compiled text descriptions into vectors...")
-embeddings = model.encode(df['embedding_text'].tolist(), show_progress_bar=True)
+embeddings = model.encode(
+    df['embedding_text'].tolist(), 
+    normalize_embeddings=True, 
+    show_progress_bar=True
+)
 
 # Store as npy
 output_filename = "embeddings/fragrance_embeddings.npy"
