@@ -69,6 +69,14 @@ class CNNCLIPHybrid(nn.Module):
         self._ce_time      = nn.CrossEntropyLoss(weight=cw.get("time"))
         self._ce_frequency = nn.CrossEntropyLoss(weight=cw.get("frequency"))
 
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
+        """Return 512-d fused embedding. (B, 512)"""
+        cnn_feats = self.cnn_backbone(x).flatten(1)
+        clip_feats = self.clip_proj(
+            self.clip_vision(pixel_values=x).pooler_output
+        )
+        return self.fusion(torch.cat([cnn_feats, clip_feats], dim=1))
+
     def forward(self, x: torch.Tensor) -> dict:
         """
         Args:

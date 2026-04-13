@@ -18,6 +18,9 @@ class CNNBaseline(nn.Module):
         # Pair with weight_decay=1e-4 in the Adam optimizer for best effect
         self.dropout = nn.Dropout(dropout)
 
+        # Embedding projection for retrieval / downstream use
+        self.embed_proj = nn.Sequential(nn.Linear(2048, 512), nn.ReLU())
+
         # 5 task heads
         self.formal_head    = nn.Linear(2048, 3)
         self.season_head    = nn.Linear(2048, 4)
@@ -37,6 +40,11 @@ class CNNBaseline(nn.Module):
         self._ce_gender    = nn.CrossEntropyLoss(weight=cw.get("gender"))
         self._ce_time      = nn.CrossEntropyLoss(weight=cw.get("time"))
         self._ce_frequency = nn.CrossEntropyLoss(weight=cw.get("frequency"))
+
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
+        """Return 512-d projected backbone features. (B, 512)"""
+        feats = self.backbone(x).flatten(1)
+        return self.embed_proj(feats)
 
     def forward(self, x: torch.Tensor) -> dict:
         """

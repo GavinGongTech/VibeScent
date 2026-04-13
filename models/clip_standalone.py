@@ -51,6 +51,13 @@ class CLIPStandalone(nn.Module):
         self._ce_time      = nn.CrossEntropyLoss(weight=cw.get("time"))
         self._ce_frequency = nn.CrossEntropyLoss(weight=cw.get("frequency"))
 
+    def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
+        """Return 512-d projected CLIP features. (B, 512)"""
+        clip_feats = self.visual_proj(
+            self.vision_model(pixel_values=x).pooler_output
+        )
+        return self.projector(clip_feats)
+
     def forward(self, x: torch.Tensor) -> dict:
         """
         Args:
