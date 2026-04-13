@@ -196,4 +196,3 @@ Deliberately different model from the label generator (`gemini-3.1-pro-preview`)
 | Text retrieval score table | ⏳ Pending | `artifacts/retrieval_comparison.txt` |
 | Reranker score table | ⏳ Week 3 | Needs benchmark cases first |
 | Benchmark cases (20 labels) | ⏳ Pending | `artifacts/benchmark_cases.json` |
-` |

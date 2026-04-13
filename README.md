@@ -2,10 +2,11 @@
 
 Harsh's branch owns:
 
-- text embeddings with `gemini-embedding-001`
+- text embeddings (`gemini-embedding-001` baseline + OSS notebook path)
 - multimodal embedding retrieval with `gemini-embedding-2`
-- reranking with `gemini-3.1-pro-preview`
-- benchmark generation utilities
+- reranking with `gemini-3.1-pro-preview` baseline plus Week 3/4 notebook stack
+- fragrance enrichment and benchmark generation utilities
+- 4-signal fusion/image scoring/backend scaffolding for demo integration
 
 ## Setup
 
@@ -13,18 +14,33 @@ Harsh's branch owns:
 uv sync --extra dev
 ```
 
-Set one of:
+For Colab notebooks (GPU runtime), install:
+
+```bash
+pip install -r notebooks/requirements.colab.txt
+```
+
+Set one of (for Gemini-compatible paths):
 
 - `GEMINI_API_KEY`
 - `GOOGLE_API_KEY`
+
+Optional keys used by notebook/demo flows:
+
+- `VOYAGE_API_KEY`
+- `HF_TOKEN`
+- `NGROK_AUTH_TOKEN`
 
 ## Project Layout
 
 ```text
 src/vibescents/
+  backend_app.py
   cli.py
   benchmark.py
   embeddings.py
+  fusion.py
+  image_scoring.py
   io_utils.py
   reranker.py
   schemas.py
@@ -36,6 +52,12 @@ examples/
   occasions.json
 
 tests/
+
+notebooks/
+  requirements.colab.txt
+  harsh_week2_pipeline.ipynb
+  harsh_week3_reranker.ipynb
+  harsh_week4_demo.ipynb
 ```
 
 ## Common Workflows
@@ -120,6 +142,4 @@ Run local tests for the non-API utilities:
 
 ```bash
 uv run pytest
-```
- pytest
 ```

@@ -1,0 +1,10 @@
+accelerate>=0.33.0
+bitsandbytes>=0.43.0
+fastapi>=0.116.0
+json_repair>=0.30.0
+outlines>=0.0.47
+pyngrok>=7.2.0
+sentence-transformers>=3.0.0
+transformers>=4.57.0
+uvicorn>=0.35.0
+vllm>=0.6.0

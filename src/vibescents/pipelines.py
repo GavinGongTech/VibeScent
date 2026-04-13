@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from vibescents.embeddings import GeminiEmbedder, Qwen3VLMultimodalEmbedder, VoyageEmbedder
+from vibescents.embeddings import GeminiEmbedder, Qwen3VLMultimodalEmbedder
 from vibescents.io_utils import dump_json, ensure_dir, save_dataframe, save_embeddings
 from vibescents.schemas import RetrievalCandidate
-from vibescents.similarity import cosine_similarity_matrix, top_k_indices
+from vibescents.similarity import cosine_similarity_matrix, normalize_rows, top_k_indices
 
 
 def embed_text_frame(
@@ -20,7 +20,7 @@ def embed_text_frame(
     model: str | None = None,
     input_type: str = "document",
 ) -> np.ndarray:
-    embedder = VoyageEmbedder()
+    embedder = GeminiEmbedder()
     output_path = ensure_dir(Path(output_dir))
     texts = frame[text_column].fillna("").astype(str).tolist()
     embeddings = embedder.embed_texts(texts, model=model, input_type=input_type)
@@ -36,7 +36,7 @@ def embed_occasions(
     output_dir: str | Path,
 ) -> np.ndarray:
     output_path = ensure_dir(Path(output_dir))
-    embedder = VoyageEmbedder()
+    embedder = GeminiEmbedder()
     texts = [item["text"] for item in occasions]
     ids = [item["occasion_id"] for item in occasions]
     embeddings = embedder.embed_texts(texts, input_type="query")
@@ -117,3 +117,29 @@ def _save_heatmap(matrix: np.ndarray, labels: list[str], output_path: Path) -> N
 
 def _python_scalar(value: object) -> object:
     return value.item() if hasattr(value, "item") else value
+
+
+def load_karans_embeddings(
+    source_path: str | Path,
+    *,
+    output_dim: int = 1024,
+    expected_rows: int | None = None,
+    l2_normalize: bool = True,
+) -> np.ndarray:
+    """Load Karan's embedding matrix and optionally Matryoshka-truncate it."""
+    matrix = np.load(Path(source_path))
+    if matrix.ndim != 2:
+        raise ValueError(f"Expected 2-D embedding matrix, got shape {matrix.shape}.")
+    rows, dims = matrix.shape
+    if expected_rows is not None and rows != expected_rows:
+        raise ValueError(f"Expected {expected_rows} rows, got {rows}.")
+    if dims < output_dim:
+        raise ValueError(
+            f"Cannot truncate to {output_dim} dimensions from {dims}. "
+            "Re-embed with a higher-dimensional model."
+        )
+
+    projected = matrix[:, :output_dim].astype(np.float32, copy=False)
+    if l2_normalize:
+        projected = normalize_rows(projected)
+    return projected
