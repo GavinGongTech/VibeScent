@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import PipelineVisual from "@/components/model/PipelineVisual";
+import DataVisual from "@/components/model/DataVisual";
 
 export default function ModelPage() {
   const ease = [0.16, 1, 0.3, 1] as const;
@@ -41,15 +42,16 @@ export default function ModelPage() {
           {/* Note 1 */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12">
             <div className="md:col-span-4">
-              <h3 className="font-serif text-2xl text-ink">Vision Encoding</h3>
+              <h3 className="font-serif text-2xl text-ink">Embedding</h3>
             </div>
             <div className="md:col-span-8">
               <p className="font-sans text-muted leading-relaxed text-lg font-light">
-                The pipeline begins with a robust vision transformer (ViT) that
-                analyzes the uploaded image. Rather than simply categorizing the
-                garment, the model isolates textural features, color palettes,
-                and structural silhouettes to establish a baseline visual
-                aesthetic.
+                When the user uploads their outfit and context, the data is
+                immediately split into distinct processing tracks. The image is
+                passed through a vision transformer (CLIP) to convert visual
+                data into embeddings. The text is simultaneously passed through
+                a sentence transformer (Qwen3-Embedding) to create embeddings
+                that represent context and the user's intent.
               </p>
             </div>
           </div>
@@ -58,16 +60,16 @@ export default function ModelPage() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12">
             <div className="md:col-span-4">
               <h3 className="font-serif text-2xl text-ink">
-                Contextual Fusion
+                Translation to Vibe Space
               </h3>
             </div>
             <div className="md:col-span-8">
               <p className="font-sans text-muted leading-relaxed text-lg font-light">
-                Visual data is inherently subjective without context. The
-                extracted image embeddings are fused with the optional
-                categorical tags (Event, Time, Mood) provided by the user. This
-                creates a multi-dimensional feature vector that represents the
-                complete styling intent.
+                Both the image and text embeddings are passed through an LLM to
+                generate representations of their respective vibes. A multimodal
+                LLM (Qwen 3.5) processes embeddings from both the text and image
+                to understand the relationship between the outfit and the
+                context.
               </p>
             </div>
           </div>
@@ -75,24 +77,115 @@ export default function ModelPage() {
           {/* Note 3 */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12">
             <div className="md:col-span-4">
+              <h3 className="font-serif text-2xl text-ink">Average Vibe</h3>
+            </div>
+            <div className="md:col-span-8">
+              <p className="font-sans text-muted leading-relaxed text-lg font-light">
+                With multiple vibes, the model computes a dynamically weighted
+                sum. These weights are learned to prioritize vibes that
+                contribute the most meaning to the model. The result is an
+                average vibe across inputs.
+              </p>
+            </div>
+          </div>
+
+          {/* Note 4 */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12">
+            <div className="md:col-span-4">
               <h3 className="font-serif text-2xl text-ink">
-                Fragrance Mapping
+                Fragrance Comparison
               </h3>
             </div>
             <div className="md:col-span-8">
               <p className="font-sans text-muted leading-relaxed text-lg font-light">
-                The fused vector is projected into a shared latent space
-                alongside our curated dataset of luxury fragrances. Using cosine
-                similarity, the model ranks the dataset, selecting the top three
-                olfactory profiles that mathematically align with the user's
-                visual aesthetic.
+                The model executes a similarity search using cosine similarity
+                to identify fragrances with similar vibes. The top-p fragrances
+                closest to the user's desired aesthetic are recommended to the
+                user.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Tech Stack Table */}
+      {/* Data Pipeline Diagram */}
+      <section className="mb-32">
+        <h2 className="font-sans text-xs tracking-widest uppercase text-muted mb-8 border-b border-border pb-4">
+          Data Preparations
+        </h2>
+        <DataVisual />
+      </section>
+
+      {/* Data Notes */}
+      <section className="mb-32">
+        <h2 className="font-sans text-xs tracking-widest uppercase text-muted mb-12 border-b border-border pb-4">
+          Steps
+        </h2>
+
+        <div className="flex flex-col gap-16">
+          {/* Note 1 */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12">
+            <div className="md:col-span-4">
+              <h3 className="font-serif text-2xl text-ink">Data Preparation</h3>
+            </div>
+            <div className="md:col-span-8">
+              <p className="font-sans text-muted leading-relaxed text-lg font-light">
+                Through normalization, deduplication, and cross-referencing, the
+                system merges and consolidates 5 datasets into a single, unified
+                dataset containing 36,000 unique fragrances with metadata and
+                scent data.
+              </p>
+            </div>
+          </div>
+
+          {/* Note 2 */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12">
+            <div className="md:col-span-4">
+              <h3 className="font-serif text-2xl text-ink">
+                Feature Extraction
+              </h3>
+            </div>
+            <div className="md:col-span-8">
+              <p className="font-sans text-muted leading-relaxed text-lg font-light">
+                The system isolates the top, middle, and bass notes alongside
+                the main accords that describe each fragrance.
+              </p>
+            </div>
+          </div>
+
+          {/* Note 3 */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12">
+            <div className="md:col-span-4">
+              <h3 className="font-serif text-2xl text-ink">Embedding</h3>
+            </div>
+            <div className="md:col-span-8">
+              <p className="font-sans text-muted leading-relaxed text-lg font-light">
+                To allow the machine to understand scent, the extracted notes
+                and accords are passed through a sentence transformer
+                (Qwen3-Embedding) to convert textual descriptions into vectors
+                that, map the spatial and semantic relationships between
+                different fragrance profiles.
+              </p>
+            </div>
+          </div>
+
+          {/* Note 4 */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12">
+            <div className="md:col-span-4">
+              <h3 className="font-serif text-2xl text-ink">Fragrance Vibes</h3>
+            </div>
+            <div className="md:col-span-8">
+              <p className="font-sans text-muted leading-relaxed text-lg font-light">
+                Embedded vectors are processed through an LLM to project them
+                into a Vibe Space. Each vibe includes the following features:
+                formality, seasonality, gender, and time of day.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Tech Stack Table
       <section>
         <h2 className="font-sans text-xs tracking-widest uppercase text-muted mb-8 border-b border-border pb-4">
           Core Technologies
@@ -132,7 +225,7 @@ export default function ModelPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </section> */}
     </div>
   );
 }

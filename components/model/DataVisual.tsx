@@ -10,35 +10,26 @@ interface WorkflowNode {
 
 type Stage = WorkflowNode[];
 
-export default function PipelineVisual() {
-  // ── THE WORKFLOW DATA ───────────────────────────────────────────
+export default function DataVisual() {
+  // ── THE DATAFLOW DATA ───────────────────────────────────────────
   // Each array inside `stages` represents a column in the visualizer.
   // Add multiple objects to an array to create a branching/parallel path.
   const stages: Stage[] = [
-    [{ title: "Image + Text Inputs", sub: "User Upload" }],
-    [
-      { title: "Vision Encoder", sub: "Extract Image Embeddings (CLIP)" },
-      {
-        title: "Context Parser",
-        sub: "Extract Text Embeddings (Qwen3-Embedding)",
-      },
-    ],
-    [
-      { title: "Image Vibes", sub: "Image Embeddings → Vibe Space (LLM)" },
-      { title: "Context Vibes", sub: "Text Embeddings → Vibe Space (LLM)" },
-      {
-        title: "Multimodal Vibes",
-        sub: "Combined Embeddings → Vibe Space (Qwen-3.5)",
-      },
-    ],
-    [{ title: "Average Vibes", sub: "Weighted Sum of Vibes" }],
+    [{ title: "Raw Data", sub: "5 Fragrance Datasets" }],
     [
       {
-        title: "Fragrance Comparison",
-        sub: "Match Existing Fragrances",
+        title: "Data Preprocessing",
+        sub: "Consolidate Data for 36,000 Fragrances",
       },
     ],
-    [{ title: "Final Output", sub: "Top Recommended Fragrances" }],
+    [{ title: "Extract Features", sub: "Synthesize Notes + Accords" }],
+    [{ title: "Embedding", sub: "Embed Features (Qwen3-Embedding)" }],
+    [
+      {
+        title: "Fragrance Vibes",
+        sub: "Generate Vibes from Embeddings (LLM)",
+      },
+    ],
   ];
   // ────────────────────────────────────────────────────────────────
 
