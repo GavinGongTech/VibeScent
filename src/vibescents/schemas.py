@@ -117,7 +117,7 @@ class FragranceRecommendation(BaseModel):
     rank: int = Field(ge=1)
     name: str
     house: str
-    score: float = Field(ge=0.0)
+    score: float = Field(ge=0.0, le=1.0)
     notes: list[str] = Field(default_factory=list)
     reasoning: str
     occasion: str
