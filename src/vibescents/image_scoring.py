@@ -113,6 +113,8 @@ def score_candidate_pool(
     *,
     head_weights: Mapping[str, float] | None = None,
 ) -> np.ndarray:
+    if isinstance(head_probabilities, ImageHeadProbabilities):
+        head_probabilities = head_probabilities.as_dict()
     if not candidates:
         return np.empty((0,), dtype=np.float32)
     likelihoods = np.array(
@@ -132,9 +134,9 @@ def score_candidate_pool(
 class NeilCNNWrapper:
     """Wrap Neil's CNN-CLIP hybrid model with probability extraction helpers."""
 
-    def __init__(self, model: Any, *, device: str | None = None) -> None:
+    def __init__(self, model: Any, device: str = "cpu") -> None:
         self._model = model
-        self._device = device or "cpu"
+        self._device = device
 
     @classmethod
     def from_checkpoint(

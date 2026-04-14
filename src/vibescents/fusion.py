@@ -92,10 +92,9 @@ def grid_search_weights(
     scorer: Callable[[np.ndarray], float],
     weight_grid: Iterable[Mapping[str, float]],
 ) -> GridSearchResult:
-    normalized = normalize_signal_map(score_map)
     best: GridSearchResult | None = None
     for candidate_weights in weight_grid:
-        fused = fuse_scores(normalized, weights=candidate_weights)
+        fused = fuse_scores(score_map, weights=candidate_weights)
         metric = float(scorer(fused))
         if best is None or metric > best.metric:
             best = GridSearchResult(weights=dict(candidate_weights), metric=metric, scores=fused)
