@@ -17,7 +17,7 @@ export default function SubmitButton({
     <button
       onClick={onClick}
       disabled={disabled || loading}
-      className="relative w-full py-4 mt-6 flex items-center justify-center bg-gold text-bg font-sans font-medium tracking-widest uppercase transition-all duration-300 hover:bg-gold-dim focus:outline-none focus:ring-2 focus:ring-gold/50 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden rounded-sm"
+      className="relative w-full py-4 mt-6 flex items-center justify-center bg-gold text-bg font-sans font-medium tracking-widest uppercase transition-all duration-300 hover:bg-gold-dim focus:outline-none focus:ring-2 focus:ring-gold/50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer overflow-hidden rounded-sm"
     >
       {loading ? (
         <div className="flex items-center gap-3">
