@@ -5,6 +5,7 @@ import math
 import numpy as np
 
 from vibescents.image_scoring import (
+    ImageHeadProbabilities,
     discretize_day_night,
     discretize_formality,
     image_negative_log_likelihood,
@@ -57,3 +58,20 @@ def test_score_candidate_pool_returns_unit_range_values() -> None:
     assert scores.shape == (2,)
     assert np.all(scores >= 0.0)
     assert np.all(scores <= 1.0)
+
+
+def test_score_candidate_pool_accepts_image_head_probabilities_dataclass() -> None:
+    """score_candidate_pool must auto-convert ImageHeadProbabilities via .as_dict()."""
+    probs_dataclass = ImageHeadProbabilities(
+        formal=np.array([0.8, 0.1, 0.1], dtype=np.float32),
+        season=np.array([0.7, 0.1, 0.1, 0.1], dtype=np.float32),
+        time=np.array([0.9, 0.1], dtype=np.float32),
+    )
+    probs_dict = probs_dataclass.as_dict()
+    candidates = [
+        {"formality": 0.2, "day_night": 0.2, "likely_season": "spring"},
+        {"formality": 0.8, "day_night": 0.8, "likely_season": "winter"},
+    ]
+    scores_via_dataclass = score_candidate_pool(probs_dataclass, candidates)
+    scores_via_dict = score_candidate_pool(probs_dict, candidates)
+    assert np.allclose(scores_via_dataclass, scores_via_dict)
