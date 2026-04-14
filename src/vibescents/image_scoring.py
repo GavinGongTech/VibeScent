@@ -147,7 +147,9 @@ class NeilCNNWrapper:
         target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         model = model_builder()
         state = torch.load(checkpoint_path, map_location=target_device)
-        if isinstance(state, dict) and "state_dict" in state:
+        if isinstance(state, dict) and "model_state_dict" in state:
+            state = state["model_state_dict"]
+        elif isinstance(state, dict) and "state_dict" in state:
             state = state["state_dict"]
         model.load_state_dict(state)
         model.to(target_device)
