@@ -9,15 +9,16 @@ from __future__ import annotations
 import base64
 import binascii
 import io
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    pass  # torch.Tensor imported only inside decode_b64_to_cnn_tensor
+from typing import Any
 
 # CLIP normalization constants used during training of Neil's CNN-CLIP hybrid.
 # These must NOT be changed — they are baked into the checkpoint weights.
 CLIP_MEAN: tuple[float, float, float] = (0.48145466, 0.4578275, 0.40821073)
 CLIP_STD: tuple[float, float, float] = (0.26862954, 0.26130258, 0.27577711)
+
+# Pre-converted list forms for torchvision.transforms.functional.normalize.
+_CLIP_MEAN_LIST: list[float] = list(CLIP_MEAN)
+_CLIP_STD_LIST: list[float] = list(CLIP_STD)
 
 # Spatial resolution expected by both the ResNet-50 backbone and the CLIP ViT-L/14.
 CNN_IMAGE_SIZE: int = 224
@@ -84,9 +85,9 @@ def decode_b64_to_cnn_tensor(image_b64: str, mime_type: str) -> Any:
     from PIL import Image  # noqa: PLC0415
     import torchvision.transforms.functional as TF  # noqa: PLC0415
     pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    pil_image = pil_image.resize((CNN_IMAGE_SIZE, CNN_IMAGE_SIZE), Image.BICUBIC)
+    pil_image = pil_image.resize((CNN_IMAGE_SIZE, CNN_IMAGE_SIZE), Image.Resampling.BICUBIC)
 
     # to_tensor: PIL (H, W, C) uint8 → float32 Tensor (C, H, W) in [0, 1]
     tensor = TF.to_tensor(pil_image)
-    tensor = TF.normalize(tensor, mean=list(CLIP_MEAN), std=list(CLIP_STD))
+    tensor = TF.normalize(tensor, mean=_CLIP_MEAN_LIST, std=_CLIP_STD_LIST)
     return tensor.unsqueeze(0)  # (1, 3, 224, 224)

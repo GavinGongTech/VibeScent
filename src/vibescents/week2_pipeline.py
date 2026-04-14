@@ -1,17 +1,25 @@
 """Week 2 pipeline stages -- called by notebook cells.
 
-Every function guards heavy imports (numpy, pandas, torch) behind runtime
-``import`` statements so the module loads on CPU-only machines for testing
-and linting.
+Every function guards torch behind runtime ``import`` statements so the module
+loads on CPU-only machines for testing and linting.  numpy and pandas are
+available in all environments that run this code.
 """
 
 from __future__ import annotations
 
 import datetime
-import json
 import pathlib
 import shutil
 from typing import TYPE_CHECKING, Any
+
+from vibescents.io_utils import (
+    dump_json,
+    ensure_dir,
+    load_embeddings,
+    load_json,
+    save_embeddings,
+)
+from vibescents.similarity import normalize_rows
 
 if TYPE_CHECKING:
     import numpy as np
@@ -55,19 +63,19 @@ def write_manifest(
         "pipeline_version": pipeline_version,
     }
     dest = pathlib.Path(path)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    ensure_dir(dest.parent)
+    dump_json(dest, payload)
 
 
-def read_manifest(path: str | pathlib.Path) -> dict:
+def read_manifest(path: str | pathlib.Path) -> dict[str, Any]:
     """Read and validate a ``manifest.json``.
 
-    Raises ``AssertionError`` if any of the :data:`MANIFEST_KEYS` are absent.
+    Raises ``ValueError`` if any of the :data:`MANIFEST_KEYS` are absent.
     """
-    text = pathlib.Path(path).read_text(encoding="utf-8")
-    data: dict = json.loads(text)
+    data: dict[str, Any] = load_json(path)
     missing = MANIFEST_KEYS - data.keys()
-    assert not missing, f"Manifest is missing keys: {sorted(missing)}"
+    if missing:
+        raise ValueError(f"Manifest is missing keys: {sorted(missing)}")
     return data
 
 
@@ -213,10 +221,12 @@ def embed_corpus(
     checkpoint_dir:
         If set, partial embeddings are saved every
         :data:`_CHECKPOINT_INTERVAL` batches as
-        ``embeddings_partial_{batch_idx}.npy``.
+        ``embeddings_partial_{batch_idx}.npy``.  Each checkpoint file
+        contains only the *delta* rows since the previous checkpoint; use
+        :func:`embed_corpus_resume` to concatenate them on recovery.
     resume_batch:
         Batch index to resume from (use :func:`embed_corpus_resume` to
-        obtain partial results and the correct index).
+        obtain the partial result and the correct index).
 
     Returns
     -------
@@ -227,10 +237,11 @@ def embed_corpus(
 
     if checkpoint_dir is not None:
         checkpoint_dir = pathlib.Path(checkpoint_dir)
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        ensure_dir(checkpoint_dir)
 
     n_batches = (len(texts) + batch_size - 1) // batch_size
     parts: list["np.ndarray"] = []
+    delta_parts: list["np.ndarray"] = []
 
     for batch_idx in range(resume_batch, n_batches):
         start = batch_idx * batch_size
@@ -238,44 +249,39 @@ def embed_corpus(
         batch = texts[start:end]
 
         raw = model.embed_texts(batch)
-        truncated = raw[:, :dim]
-        parts.append(truncated)
+        normalized_batch = normalize_rows(raw[:, :dim].astype(np.float32))
+        parts.append(normalized_batch)
+        delta_parts.append(normalized_batch)
 
-        # Checkpoint every _CHECKPOINT_INTERVAL batches
         if (
             checkpoint_dir is not None
             and (batch_idx + 1) % _CHECKPOINT_INTERVAL == 0
         ):
-            partial = np.vstack(parts)
-            np.save(
+            save_embeddings(
                 checkpoint_dir / f"embeddings_partial_{batch_idx}.npy",
-                partial.astype(np.float32),
+                np.vstack(delta_parts),
             )
+            delta_parts.clear()
             print(
                 f"  Checkpoint saved at batch {batch_idx + 1}/{n_batches} "
-                f"({partial.shape[0]} rows)"
+                f"({sum(p.shape[0] for p in parts)} rows)"
             )
 
     if not parts:
         return np.empty((0, dim), dtype=np.float32)
 
-    matrix = np.vstack(parts).astype(np.float32)
-
-    # L2-normalize each row
-    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
-    norms = np.where(norms == 0, 1.0, norms)  # avoid division by zero
-    matrix = matrix / norms
-
-    return matrix
+    return np.vstack(parts)
 
 
 def embed_corpus_resume(
     checkpoint_dir: str | pathlib.Path,
 ) -> tuple["np.ndarray | None", int]:
-    """Resume embedding from the latest checkpoint.
+    """Resume embedding from checkpoints.
 
     Globs for ``embeddings_partial_*.npy`` in *checkpoint_dir*, sorts by
-    batch index, and returns ``(partial_embeddings, next_batch_idx)``.
+    batch index, concatenates all delta files in order, and returns
+    ``(partial_embeddings, next_batch_idx)``.  Each checkpoint file stores
+    only the rows written since the previous checkpoint (delta format).
     If no checkpoints exist, returns ``(None, 0)``.
     """
     import numpy as np  # noqa: PLC0415
@@ -288,11 +294,9 @@ def embed_corpus_resume(
     if not files:
         return None, 0
 
-    # The latest checkpoint file contains all rows up to that point
-    latest = files[-1]
-    batch_idx = int(latest.stem.split("_")[-1])
-    partial = np.load(latest)
-    return partial, batch_idx + 1
+    partial = np.concatenate([load_embeddings(f) for f in files], axis=0)
+    latest_batch_idx = int(files[-1].stem.split("_")[-1])
+    return partial, latest_batch_idx + 1
 
 
 # ---------------------------------------------------------------------------
@@ -307,10 +311,11 @@ def embedding_sanity_check(
 ) -> None:
     """Spot-check embedding quality via pairwise cosine similarity variance.
 
-    Picks *n_pairs* random row-pairs, computes their cosine similarity,
-    and asserts that the variance exceeds *min_variance*.  A collapsed or
-    degenerate embedding matrix (all rows identical) will have near-zero
-    variance and fail this check.
+    Picks *n_pairs* random row-pairs and computes their cosine similarity.
+    Because *emb* is expected to be L2-normalized (as returned by
+    :func:`embed_corpus`), the cosine similarity is just the dot product.
+    Raises ``ValueError`` if the variance falls below *min_variance*, which
+    indicates a collapsed or degenerate embedding matrix.
     """
     import numpy as np  # noqa: PLC0415
 
@@ -321,27 +326,27 @@ def embedding_sanity_check(
     n = emb.shape[0]
     actual_pairs = min(n_pairs, n * (n - 1) // 2)
 
-    indices = rng.choice(n, size=(actual_pairs, 2), replace=True)
-    # Re-draw any self-pairs
+    a_idx = rng.integers(0, n, size=actual_pairs)
+    b_idx = rng.integers(0, n, size=actual_pairs)
     for i in range(actual_pairs):
-        while indices[i, 0] == indices[i, 1]:
-            indices[i, 1] = rng.integers(0, n)
+        max_tries = 10 * n
+        tries = 0
+        while a_idx[i] == b_idx[i]:
+            b_idx[i] = rng.integers(0, n)
+            tries += 1
+            if tries >= max_tries:
+                b_idx[i] = (int(a_idx[i]) + 1) % n
+                break
 
-    similarities: list[float] = []
-    for a, b in indices:
-        dot = float(np.dot(emb[a], emb[b]))
-        norm_a = float(np.linalg.norm(emb[a]))
-        norm_b = float(np.linalg.norm(emb[b]))
-        denom = norm_a * norm_b
-        cos = dot / denom if denom > 0 else 0.0
-        similarities.append(cos)
+    similarities = [float(np.dot(emb[a], emb[b])) for a, b in zip(a_idx, b_idx)]
 
     variance = float(np.var(similarities))
-    assert variance > min_variance, (
-        f"Embedding cosine-similarity variance is {variance:.6f}, "
-        f"below threshold {min_variance}. "
-        f"The embedding matrix may be collapsed or degenerate."
-    )
+    if variance <= min_variance:
+        raise ValueError(
+            f"Embedding cosine-similarity variance is {variance:.6f}, "
+            f"below threshold {min_variance}. "
+            "The embedding matrix may be collapsed or degenerate."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +430,7 @@ def validate_enrichment(
     success = int(df["vibe_sentence"].notna().sum())
     rate = success / total
     if rate < min_success_rate:
-        raise AssertionError(
+        raise ValueError(
             f"Enrichment success rate {rate:.4f} ({success}/{total}) "
             f"is below the required {min_success_rate:.2%} threshold."
         )
@@ -459,10 +464,12 @@ def smoke_test_enrichment(
         raise TypeError(
             f"Expected EnrichmentSchemaV2, got {type(result).__name__}."
         )
-    # Validate required fields are populated
-    assert result.vibe_sentence.strip(), "vibe_sentence is empty"
-    assert result.likely_season, "likely_season is empty"
-    assert len(result.character_tags) >= 3, (
-        f"character_tags has {len(result.character_tags)} items, need >= 3"
-    )
+    if not result.vibe_sentence.strip():
+        raise ValueError("Smoke test failed: vibe_sentence is empty.")
+    if not result.likely_season:
+        raise ValueError("Smoke test failed: likely_season is empty.")
+    if len(result.character_tags) < 3:
+        raise ValueError(
+            f"Smoke test failed: character_tags has {len(result.character_tags)} items, need >= 3."
+        )
     return True

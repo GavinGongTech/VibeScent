@@ -59,7 +59,7 @@ def fuse_scores(
         raise ValueError(f"Weight sum must equal 1.0, got {weight_total:.6f}.")
     result = np.zeros_like(next(iter(normalized.values())))
     for name, scores in normalized.items():
-        result = result + (scores * float(selected_weights[name]))
+        result += scores * float(selected_weights[name])
     return result
 
 
@@ -86,15 +86,27 @@ def build_weight_grid(
     return grid
 
 
+def _fuse_normalized(
+    normalized_map: dict[str, np.ndarray],
+    weights: Mapping[str, float],
+) -> np.ndarray:
+    """Weighted sum of already-normalized signal vectors (no re-normalization)."""
+    result = np.zeros_like(next(iter(normalized_map.values())))
+    for name, scores in normalized_map.items():
+        result += scores * float(weights[name])
+    return result
+
+
 def grid_search_weights(
     score_map: Mapping[str, np.ndarray],
     *,
     scorer: Callable[[np.ndarray], float],
     weight_grid: Iterable[Mapping[str, float]],
 ) -> GridSearchResult:
+    normalized = normalize_signal_map(score_map)  # normalize once across all grid iterations
     best: GridSearchResult | None = None
     for candidate_weights in weight_grid:
-        fused = fuse_scores(score_map, weights=candidate_weights)
+        fused = _fuse_normalized(normalized, candidate_weights)
         metric = float(scorer(fused))
         if best is None or metric > best.metric:
             best = GridSearchResult(weights=dict(candidate_weights), metric=metric, scores=fused)

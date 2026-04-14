@@ -22,6 +22,7 @@ DEFAULT_HEAD_WEIGHTS = {
 }
 
 _EPSILON = 1e-8
+_HEAD_NAMES = ("formal", "season", "time")
 
 
 @dataclass(frozen=True)
@@ -31,11 +32,7 @@ class ImageHeadProbabilities:
     time: np.ndarray
 
     def as_dict(self) -> dict[str, np.ndarray]:
-        return {
-            "formal": self.formal,
-            "season": self.season,
-            "time": self.time,
-        }
+        return {name: getattr(self, name) for name in _HEAD_NAMES}
 
 
 def discretize_formality(formality: float) -> int:
@@ -67,13 +64,12 @@ def image_negative_log_likelihood(
     *,
     head_weights: Mapping[str, float] | None = None,
 ) -> float:
-    required_heads = ("formal", "season", "time")
-    for key in required_heads:
+    for key in _HEAD_NAMES:
         if key not in head_probabilities:
             raise ValueError(f"Missing required head probabilities: {key}")
 
     weights = dict(head_weights or DEFAULT_HEAD_WEIGHTS)
-    for key in required_heads:
+    for key in _HEAD_NAMES:
         if key not in weights:
             raise ValueError(f"Missing head weight for: {key}")
 
@@ -85,12 +81,12 @@ def image_negative_log_likelihood(
     time_target = discretize_day_night(day_night)
     season_target = season_target_index(likely_season, head_probabilities["season"])
 
-    terms = [
-        weights["formal"] * np.log(_safe_probability(head_probabilities["formal"], formal_target)),
-        weights["season"] * np.log(_safe_probability(head_probabilities["season"], season_target)),
-        weights["time"] * np.log(_safe_probability(head_probabilities["time"], time_target)),
-    ]
-    return float(-np.sum(terms))
+    nll = (
+        weights["formal"] * np.log(_safe_probability(head_probabilities["formal"], formal_target))
+        + weights["season"] * np.log(_safe_probability(head_probabilities["season"], season_target))
+        + weights["time"] * np.log(_safe_probability(head_probabilities["time"], time_target))
+    )
+    return float(-nll)
 
 
 def image_score_likelihood(
@@ -173,18 +169,9 @@ class NeilCNNWrapper:
 
 def _coerce_head_outputs(raw: Any) -> dict[str, np.ndarray]:
     if isinstance(raw, Mapping):
-        return {
-            "formal": _to_numpy(raw["formal"]),
-            "season": _to_numpy(raw["season"]),
-            "time": _to_numpy(raw["time"]),
-        }
+        return {name: _to_numpy(raw[name]) for name in _HEAD_NAMES}
     if isinstance(raw, (tuple, list)) and len(raw) >= 3:
-        formal, season, time = raw[:3]
-        return {
-            "formal": _to_numpy(formal),
-            "season": _to_numpy(season),
-            "time": _to_numpy(time),
-        }
+        return {name: _to_numpy(val) for name, val in zip(_HEAD_NAMES, raw[:3])}
     raise ValueError("Unsupported CNN output format. Expected mapping or tuple/list with 3 heads.")
 
 

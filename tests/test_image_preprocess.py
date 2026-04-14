@@ -135,7 +135,7 @@ def test_decode_b64_to_cnn_tensor_calls_pipeline_in_order() -> None:
     opened = fake_pil_image_class.open.return_value
     opened.convert.assert_called_once_with("RGB")
     converted = opened.convert.return_value
-    converted.resize.assert_called_once_with((224, 224), 3)  # BICUBIC = 3
+    converted.resize.assert_called_once_with((224, 224), fake_pil_image_class.Resampling.BICUBIC)
 
     # to_tensor received the resized PIL image
     fake_tf.to_tensor.assert_called_once_with(converted.resize.return_value)

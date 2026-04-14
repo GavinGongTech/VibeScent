@@ -84,7 +84,7 @@ def test_read_manifest_missing_keys_raises(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     # Write a file that lacks most required keys.
     manifest_path.write_text(json.dumps({"model": "voyage-3-large", "dim": 1024}))
-    with pytest.raises((AssertionError, KeyError)):
+    with pytest.raises(ValueError):
         w2.read_manifest(manifest_path)
 
 
@@ -332,11 +332,12 @@ def test_embed_corpus_resume_returns_none_and_zero_for_empty_dir(tmp_path: Path)
     assert next_batch == 0
 
 
-def test_embed_corpus_resume_with_checkpoints_returns_latest_and_next_idx(
+def test_embed_corpus_resume_with_checkpoints_returns_concatenated_deltas(
     tmp_path: Path,
 ) -> None:
-    # The real implementation returns only the LATEST checkpoint file (not a concat).
-    # It expects files named embeddings_partial_{batch_idx}.npy.
+    # Each checkpoint file contains only the delta rows since the previous
+    # checkpoint (not a cumulative snapshot).  embed_corpus_resume concatenates
+    # all files in batch-index order to reconstruct the full partial result.
     batch0 = np.random.default_rng(0).standard_normal((50, 1024)).astype(np.float32)
     batch1 = np.random.default_rng(1).standard_normal((50, 1024)).astype(np.float32)
 
@@ -345,9 +346,8 @@ def test_embed_corpus_resume_with_checkpoints_returns_latest_and_next_idx(
 
     result, next_batch = w2.embed_corpus_resume(tmp_path)
 
-    # The latest checkpoint is batch_idx=1, so next batch is 2.
     assert result is not None
     assert next_batch == 2
-    # Result should be the latest partial checkpoint (batch1's content).
-    assert result.shape == batch1.shape
-    assert np.allclose(result, batch1)
+    expected = np.concatenate([batch0, batch1], axis=0)
+    assert result.shape == expected.shape
+    assert np.allclose(result, expected)
