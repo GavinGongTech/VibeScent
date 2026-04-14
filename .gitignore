@@ -2,9 +2,21 @@
 .uv-cache/
 .pytest_cache/
 .ruff_cache/
-artifacts/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .env
+
+# Large embedding arrays (>20 MB) — stored in Drive, not git
+artifacts/fragrance_*/embeddings.npy
+artifacts/multimodal_*/doc_embeddings.npy
+# Allow small artifacts to be committed
+!artifacts/occasions/embeddings.npy
+# Model checkpoints
+*.pt
+*.ckpt
+*.bin
+checkpoints/
+# Colab intermediates
+*.ckpt.csv
