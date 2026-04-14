@@ -119,7 +119,7 @@ def detect_gpu_tier() -> str:
 
     if not torch.cuda.is_available():
         raise RuntimeError("No CUDA GPU detected.")
-    total_gb = torch.cuda.get_device_properties(0).total_mem / 1e9
+    total_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
     if total_gb >= 35:
         return "A100"
     if total_gb >= 20:
