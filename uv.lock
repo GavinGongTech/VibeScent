@@ -999,6 +999,15 @@ wheels = [
 ]
 
 [[package]]
+name = "json-repair"
+version = "0.59.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ed/cb/a49f1661737a78098ce33668350590c981a4163055bc9a01e0cc688d896a/json_repair-0.59.2.tar.gz", hash = "sha256:1d8abb2fa94c4035a66ef9892ea3785dace8dcf09c583e6de781cfd31b278b3d", size = 48341, upload-time = "2026-04-11T15:55:41.145Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/03/7afcecb4242d93b684708b47fb014abdc1922a01b38c0e30f1117ae74a83/json_repair-0.59.2-py3-none-any.whl", hash = "sha256:6ca6238519c24f671bcb05d1f38a0d6a452bb4ca5af82137595c5c2f1a0fb785", size = 46918, upload-time = "2026-04-11T15:55:39.817Z" },
+]
+
+[[package]]
 name = "jsonpatch"
 version = "1.33"
 source = { registry = "https://pypi.org/simple" }
@@ -2777,6 +2786,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "google-genai" },
+    { name = "json-repair" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
@@ -2801,6 +2811,7 @@ gpu = [
 requires-dist = [
     { name = "accelerate", marker = "extra == 'gpu'", specifier = ">=0.26.0" },
     { name = "google-genai" },
+    { name = "json-repair" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },

@@ -368,8 +368,6 @@ def select_tier_b(
     **Hard minimum**: raises ``ValueError`` if even the relaxed filter
     yields fewer than *min_size* rows.
     """
-    import pandas as pd  # noqa: PLC0415
-
     strict_cols = ["top_notes", "middle_notes", "base_notes", "main_accords"]
     relaxed_cols = ["top_notes", "main_accords"]
 

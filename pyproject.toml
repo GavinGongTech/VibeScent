@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "google-genai",
+  "json-repair",
   "matplotlib",
   "numpy",
   "pandas",
@@ -38,3 +39,4 @@ packages = ["src/vibescents"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+cache_dir = "/tmp/pytest_cache"
