@@ -24,9 +24,7 @@ class VoyageEmbedder:
         key = self.settings.voyage_api_key
         if not key:
             raise ValueError("Set VOYAGE_API_KEY before calling the Voyage AI API.")
-        import voyageai
-
-        self._client = voyageai.Client(api_key=key)
+        self._key = key
 
     def embed_texts(
         self,
@@ -36,6 +34,8 @@ class VoyageEmbedder:
         input_type: str = "document",
         output_dimension: int | None = None,
     ) -> np.ndarray:
+        import requests
+        
         text_list = list(texts)
         if not text_list:
             return np.empty((0, 0), dtype=np.float32)
@@ -48,13 +48,26 @@ class VoyageEmbedder:
             batch = text_list[start : start + self._MAX_BATCH_SIZE]
             for attempt in range(5):
                 try:
-                    result = self._client.embed(
-                        batch,
-                        model=m,
-                        input_type=input_type,
-                        output_dimension=dim,
+                    payload = {
+                        "input": batch,
+                        "model": m,
+                        "input_type": input_type,
+                    }
+                    if dim:
+                        payload["output_dimension"] = dim
+
+                    response = requests.post(
+                        "https://api.voyageai.com/v1/embeddings",
+                        headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
+                        json=payload,
+                        timeout=60,
                     )
-                    all_rows.append(np.array(result.embeddings, dtype=np.float32))
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    # Sort data by index just in case
+                    embeddings = [item["embedding"] for item in sorted(data["data"], key=lambda x: x.get("index", 0))]
+                    all_rows.append(np.array(embeddings, dtype=np.float32))
                     break
                 except Exception as e:
                     if attempt < 4 and ("429" in str(e) or "rate" in str(e).lower()):
@@ -86,7 +99,8 @@ class GeminiEmbedder:
         texts: Iterable[str],
         *,
         model: str | None = None,
-        task_type: str = "RETRIEVAL_DOCUMENT",
+        task_type: str | None = None,
+        input_type: str | None = None,
         output_dimensionality: int | None = None,
     ) -> np.ndarray:
         from google.genai import types
@@ -95,11 +109,17 @@ class GeminiEmbedder:
         if not text_list:
             return np.empty((0, 0), dtype=np.float32)
 
+        if not task_type:
+            if input_type == "query":
+                task_type = "RETRIEVAL_QUERY"
+            else:
+                task_type = "RETRIEVAL_DOCUMENT"
+
         all_rows: list[np.ndarray] = []
         n_batches = (len(text_list) + self._MAX_BATCH_SIZE - 1) // self._MAX_BATCH_SIZE
         for i, start in enumerate(range(0, len(text_list), self._MAX_BATCH_SIZE)):
             batch = text_list[start : start + self._MAX_BATCH_SIZE]
-            for attempt in range(5):
+            for attempt in range(100):
                 try:
                     response = self._client.models.embed_content(
                         model=model or self.settings.text_embedding_model,
@@ -112,10 +132,16 @@ class GeminiEmbedder:
                     all_rows.append(self._extract_matrix(response))
                     break
                 except Exception as e:
-                    if attempt < 4 and ("429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)):
-                        wait = min(30 * (attempt + 1), 60)
-                        print(f"  Rate limited on batch {i+1}, waiting {wait}s...")
-                        time.sleep(wait)
+                    if attempt < 99 and ("429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)):
+                        import re
+                        delay = 60.0
+                        match = re.search(r"retry in (\d+(?:\.\d+)?)s", str(e))
+                        if match:
+                            delay = float(match.group(1)) + 1.0
+                        else:
+                            delay = min(300.0, 2 ** (attempt + 1))
+                        print(f"  Rate limited on batch {i+1}, waiting {delay:.1f}s... (attempt {attempt+1})")
+                        time.sleep(delay)
                     else:
                         raise
             if n_batches > 1 and i < n_batches - 1:

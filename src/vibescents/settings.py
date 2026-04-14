@@ -9,7 +9,7 @@ from pathlib import Path
 class Settings:
     api_key: str | None
     voyage_api_key: str | None = None
-    text_embedding_model: str = "voyage-3-large"
+    text_embedding_model: str = "gemini-embedding-001"
     multimodal_embedding_model: str = "Qwen/Qwen3-VL-Embedding-8B"
     reranker_model: str = "gemini-3.1-pro-preview"
     judge_model: str = "gemini-2.5-pro"
