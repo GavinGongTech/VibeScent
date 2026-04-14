@@ -306,8 +306,8 @@ def embed_corpus_resume(
 
 def embedding_sanity_check(
     emb: "np.ndarray",
-    n_pairs: int = 10,
-    min_variance: float = 0.01,
+    n_pairs: int = 1000,
+    min_variance: float = 0.001,
 ) -> None:
     """Spot-check embedding quality via pairwise cosine similarity variance.
 
