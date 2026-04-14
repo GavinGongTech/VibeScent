@@ -1,5 +1,6 @@
 # Colab-only GPU dependencies — NOT in pyproject.toml
 # Pin exact versions after first successful Colab run
+transformers>=4.51.0
 vllm>=0.8,<0.9
 outlines>=0.1,<0.2
 sentence-transformers>=3.4,<4.0
