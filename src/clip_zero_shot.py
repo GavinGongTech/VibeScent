@@ -1,3 +1,7 @@
+import os
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
+import argparse
 import json
 import os
 from pathlib import Path
@@ -104,7 +108,23 @@ def score_classification(img_embs: torch.Tensor, class_embs: dict) -> list[int]:
 # Main
 # ---------------------------------------------------------------------------
 
+LABEL_MAPS = {
+    "formal":    {0: "casual", 1: "smart casual", 2: "formal"},
+    "season":    {1: "spring", 2: "summer", 3: "fall", 4: "winter"},
+    "gender":    {0: "male", 1: "female", 2: "neutral"},
+    "time":      {0: "day", 1: "night"},
+    "frequency": {0: "occasional", 1: "everyday"},
+}
+
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
 def main():
+    parser = argparse.ArgumentParser(description="CLIP zero-shot vibe labeling")
+    parser.add_argument("--input", type=str, default=None,
+                        help="Path to a single image or folder. Omit to batch-label the train/ directory.")
+    args = parser.parse_args()
+
     device = get_device()
     print(f"Using device: {device}")
 
@@ -122,20 +142,33 @@ def main():
     prompt_embs = build_prompt_embeddings(vibes, model, processor, device)
 
     # Collect image paths
-    image_paths = sorted(
-        p for p in TRAIN_DIR.rglob("*")
-        if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
-    )
-    print(f"Found {len(image_paths)} images in {TRAIN_DIR}")
+    if args.input:
+        input_path = Path(args.input)
+        if not input_path.exists():
+            raise FileNotFoundError(f"Input not found: {input_path}")
+        if input_path.is_dir():
+            image_paths = sorted(p for p in input_path.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS)
+        else:
+            image_paths = [input_path]
+        save_to_file = False
+    else:
+        image_paths = sorted(p for p in TRAIN_DIR.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS)
+        save_to_file = True
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Found {len(image_paths)} image(s)")
+
+    if not image_paths:
+        print("No images found.")
+        return
+
+    if save_to_file:
+        OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     results = {}
 
     for batch_start in tqdm(range(0, len(image_paths), BATCH_SIZE), desc="Labeling", unit="batch"):
         batch_paths = image_paths[batch_start : batch_start + BATCH_SIZE]
 
-        # Load images, skip corrupt files
         images, valid_paths = [], []
         for p in batch_paths:
             try:
@@ -157,18 +190,25 @@ def main():
         frequency_labels = score_classification(img_embs, prompt_embs["frequency"])
 
         for i, path in enumerate(valid_paths):
-            results[path.name] = {
+            raw = {
                 "formal":    formal_labels[i],
                 "season":    season_labels[i],
                 "gender":    gender_labels[i],
                 "time":      time_labels[i],
                 "frequency": frequency_labels[i],
             }
+            results[path.name] = raw
 
-    with open(OUT_PATH, "w") as f:
-        json.dump(results, f, indent=2)
+            if not save_to_file:
+                vibes_readable = {dim: LABEL_MAPS[dim][raw[dim]] for dim in raw}
+                print(f"\n{path.name}")
+                for dim, label in vibes_readable.items():
+                    print(f"  {dim:10s}: {label}")
 
-    print(f"Saved {len(results)} labels → {OUT_PATH}")
+    if save_to_file:
+        with open(OUT_PATH, "w") as f:
+            json.dump(results, f, indent=2)
+        print(f"Saved {len(results)} labels → {OUT_PATH}")
 
 
 if __name__ == "__main__":

@@ -1,3 +1,6 @@
+import os
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
 import argparse
 import json
 import sys
