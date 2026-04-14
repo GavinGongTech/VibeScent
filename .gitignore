@@ -20,3 +20,10 @@ artifacts/multimodal_*/doc_embeddings.npy
 checkpoints/
 # Colab intermediates
 *.ckpt.csv
+# Local logs and upload bundles
+*.log
+artifacts/colab_upload_bundle/
+artifacts/colab_upload_bundle.tar.gz
+# Stale enrichment CSV (no real LLM data — regenerate on Colab)
+data/vibescent_enriched.csv
+data/vibescent_enriched_sample.csv
