@@ -1,9 +1,9 @@
 # Colab-only GPU dependencies — NOT in pyproject.toml
 # Pin exact versions after first successful Colab run
-# transformers>=5.2.0 required for qwen3_5 architecture (released 2026-02-16)
-# vllm>=0.17.0 required for Qwen3.5 model support
-transformers>=5.2.0
+# vllm>=0.17.0 required for Qwen3.5 model support; it pins transformers>=4.56.0,<5
+# transformers>=4.57.0 required for qwen3_5 architecture (backported from 5.x)
 vllm>=0.17.0
+transformers>=4.57.0,<5
 outlines>=0.1,<0.2
 sentence-transformers>=3.4,<4.0
 bitsandbytes>=0.45,<0.46
