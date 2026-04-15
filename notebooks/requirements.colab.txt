@@ -1,0 +1,16 @@
+# Colab-only GPU dependencies — NOT in pyproject.toml
+# Pin exact versions after first successful Colab run
+# vllm>=0.17.0 required for Qwen3.5 model support; it pins transformers>=4.56.0,<5
+# transformers>=4.57.0 required for qwen3_5 architecture (backported from 5.x)
+vllm>=0.17.0
+transformers>=4.57.0,<5
+# outlines removed: vllm>=0.17 bundles outlines-core==0.2.11 internally;
+# standalone outlines 0.1.x requires an incompatible older outlines-core
+sentence-transformers>=3.4,<4.0
+bitsandbytes>=0.45,<0.46
+accelerate>=1.3,<2.0
+fastapi>=0.115,<1.0
+uvicorn>=0.34,<1.0
+pyngrok>=7.2,<8.0
+json_repair>=0.35,<1.0
+gradio>=5.0,<6.0

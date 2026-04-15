@@ -1,0 +1,44 @@
+[project]
+name = "vibescents-text"
+version = "0.1.0"
+description = "Text retrieval, multimodal retrieval, and reranking pipeline for VibeScent."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.135.3",
+  "google-genai",
+  "json-repair",
+  "matplotlib",
+  "numpy",
+  "pandas",
+  "pillow",
+  "pydantic>=2",
+  "uvicorn>=0.44.0",
+  "voyageai",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "ruff",
+]
+gpu = [
+  "torch>=2.0.0",
+  "transformers>=4.57.0",
+  "qwen-vl-utils>=0.0.14",
+  "accelerate>=0.26.0",
+]
+
+[project.scripts]
+vibescents = "vibescents.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vibescents"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+cache_dir = "/tmp/pytest_cache"
