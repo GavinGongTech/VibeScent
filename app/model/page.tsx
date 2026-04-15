@@ -65,11 +65,11 @@ export default function ModelPage() {
             </div>
             <div className="md:col-span-8">
               <p className="font-sans text-muted leading-relaxed text-lg font-light">
-                Both the image and text embeddings are passed through an LLM to
-                generate representations of their respective vibes. A multimodal
-                LLM (Qwen 3.5) processes embeddings from both the text and image
-                to understand the relationship between the outfit and the
-                context.
+                The image embeddings are passed through (CLIP) to represent
+                vibes. The text embeddings are passed through an LLM to
+                represent vibes. A multimodal LLM (Qwen 3.5) processes
+                embeddings from both the text and image to understand the
+                relationship between the outfit and the context.
               </p>
             </div>
           </div>

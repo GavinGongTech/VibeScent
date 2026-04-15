@@ -24,7 +24,7 @@ export default function PipelineVisual() {
       },
     ],
     [
-      { title: "Image Vibes", sub: "Image Embeddings → Vibe Space (LLM)" },
+      { title: "Image Vibes", sub: "Image Embeddings → Vibe Space (CLIP)" },
       { title: "Context Vibes", sub: "Text Embeddings → Vibe Space (LLM)" },
       {
         title: "Multimodal Vibes",
