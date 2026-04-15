@@ -114,7 +114,7 @@ def test_stage_complete_false_when_no_manifest_exists(tmp_path: Path) -> None:
 
 def test_detect_gpu_tier_returns_a100_for_40gb_plus() -> None:
     props = MagicMock()
-    props.total_mem = 45 * 1_000_000_000  # 45 GB (uses 1e9 divisor)
+    props.total_memory = 45 * 1_000_000_000  # 45 GB (uses 1e9 divisor)
     # Patch via the stub already in sys.modules so the runtime import in the
     # function under test resolves to the same object.
     _TORCH_STUB.cuda.is_available = MagicMock(return_value=True)
@@ -124,7 +124,7 @@ def test_detect_gpu_tier_returns_a100_for_40gb_plus() -> None:
 
 def test_detect_gpu_tier_returns_l4_for_mid_range() -> None:
     props = MagicMock()
-    props.total_mem = 22 * 1_000_000_000  # 22 GB
+    props.total_memory = 22 * 1_000_000_000  # 22 GB
     _TORCH_STUB.cuda.is_available = MagicMock(return_value=True)
     _TORCH_STUB.cuda.get_device_properties = MagicMock(return_value=props)
     assert w2.detect_gpu_tier() == "L4"
@@ -132,7 +132,7 @@ def test_detect_gpu_tier_returns_l4_for_mid_range() -> None:
 
 def test_detect_gpu_tier_returns_t4_for_small() -> None:
     props = MagicMock()
-    props.total_mem = 14 * 1_000_000_000  # 14 GB
+    props.total_memory = 14 * 1_000_000_000  # 14 GB
     _TORCH_STUB.cuda.is_available = MagicMock(return_value=True)
     _TORCH_STUB.cuda.get_device_properties = MagicMock(return_value=props)
     assert w2.detect_gpu_tier() == "T4"
