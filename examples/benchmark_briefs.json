@@ -1,0 +1,82 @@
+[
+  {
+    "case_id": "case_001",
+    "brief": "Black tie winter gala. Outfit image should show a black tuxedo, patent shoes, and a crisp white shirt. Occasion text: formal charity gala at night with a polished, luxurious mood."
+  },
+  {
+    "case_id": "case_002",
+    "brief": "Summer rooftop cocktail party. Outfit image should show light tailoring, loafers, and open-collar relaxed elegance. Occasion text: upscale but warm-weather social event at sunset."
+  },
+  {
+    "case_id": "case_003",
+    "brief": "Streetwear-heavy night out. Outfit image should show dark layered streetwear, sneakers, and sharp urban energy. Occasion text: late-night city hangout with friends."
+  },
+  {
+    "case_id": "case_004",
+    "brief": "Business-casual office event. Outfit image should show a navy blazer, chinos, and clean leather shoes. Occasion text: professional networking mixer after work."
+  },
+  {
+    "case_id": "case_005",
+    "brief": "Spring wedding guest. Outfit image should show soft tailoring, pastel details, and elegant daytime formality. Occasion text: outdoor garden wedding in mild weather."
+  },
+  {
+    "case_id": "case_006",
+    "brief": "Creative-industry networking event. Outfit image should show modern monochrome layers, sleek trousers, and fashion-forward restraint. Occasion text: gallery opening with understated artistic confidence."
+  },
+  {
+    "case_id": "case_007",
+    "brief": "Beachside resort dinner. Outfit image should show linen, relaxed structure, and open airy styling. Occasion text: upscale vacation dinner by the water in humid evening weather."
+  },
+  {
+    "case_id": "case_008",
+    "brief": "Cold-weather date night. Outfit image should show a dark wool coat, knitwear, boots, and close-fitting layers. Occasion text: intimate winter evening dinner with romantic warmth."
+  },
+  {
+    "case_id": "case_009",
+    "brief": "Weekend brunch in clean casualwear. Outfit image should show white sneakers, light denim, a knit polo, and fresh daytime styling. Occasion text: daytime social outing with low formality and bright energy."
+  },
+  {
+    "case_id": "case_010",
+    "brief": "Avant-garde editorial event. Outfit image should show exaggerated silhouettes, dramatic layering, and dark directional styling. Occasion text: fashion event with experimental and artistic intent."
+  },
+  {
+    "case_id": "case_011",
+    "brief": "Formal holiday party. Outfit image should show velvet or textured eveningwear, deeper tones, and rich seasonal styling. Occasion text: festive winter celebration at night."
+  },
+  {
+    "case_id": "case_012",
+    "brief": "Daytime university presentation. Outfit image should show smart-casual polish, clean tailoring, and minimal accessories. Occasion text: important daytime presentation with professionalism and approachability."
+  },
+  {
+    "case_id": "case_013",
+    "brief": "Summer sundress look. Outfit image should show a breezy floral dress, sandals, and soft romantic styling. Occasion text: warm-weather daytime social event with feminine freshness."
+  },
+  {
+    "case_id": "case_014",
+    "brief": "Autumn coffee date. Outfit image should show brown leather, knit textures, denim, and soft seasonal warmth. Occasion text: casual but intentional daytime date in cool weather."
+  },
+  {
+    "case_id": "case_015",
+    "brief": "High-energy gym-to-street athleisure. Outfit image should show technical fabrics, running shoes, and sporty minimalism. Occasion text: active daytime errands with fresh and clean energy."
+  },
+  {
+    "case_id": "case_016",
+    "brief": "Luxury hotel lobby meeting. Outfit image should show dark tailored outerwear, crisp layering, and quiet wealth styling. Occasion text: polished evening business meeting with high-status restraint."
+  },
+  {
+    "case_id": "case_017",
+    "brief": "Music festival daytime fit. Outfit image should show expressive color, layered accessories, and playful warm-weather styling. Occasion text: energetic outdoor social setting with bold personality."
+  },
+  {
+    "case_id": "case_018",
+    "brief": "Minimalist all-black dinner outfit. Outfit image should show sharp black layers, refined shoes, and modern evening confidence. Occasion text: sleek dinner reservation with urban sophistication."
+  },
+  {
+    "case_id": "case_019",
+    "brief": "Rainy-day trench look. Outfit image should show a trench coat, boots, and clean muted layering. Occasion text: cool-weather city commute with elevated practicality."
+  },
+  {
+    "case_id": "case_020",
+    "brief": "Luxury resort poolside afternoon. Outfit image should show bright resortwear, open textures, and laid-back elegance. Occasion text: sunny leisure setting with easy glamour and freshness."
+  }
+]

@@ -1,0 +1,47 @@
+# === Python ===
+.venv/
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# === Environment & secrets ===
+.env
+
+# === macOS ===
+.DS_Store
+
+# === Large embedding arrays (>20 MB) — stored in Drive, not git ===
+artifacts/fragrance_*/embeddings.npy
+artifacts/multimodal_*/doc_embeddings.npy
+# Allow small artifacts to be committed
+!artifacts/occasions/embeddings.npy
+
+# === Model checkpoints ===
+*.pt
+*.ckpt
+*.bin
+checkpoints/
+
+# === Colab intermediates ===
+*.ckpt.csv
+
+# === Local logs and upload bundles ===
+*.log
+artifacts/colab_upload_bundle/
+artifacts/colab_upload_bundle.tar.gz
+
+# === Stale enrichment CSV ===
+data/vibescent_enriched.csv
+data/vibescent_enriched_sample.csv
+
+# === Image Processing ===
+data/raw/
+train/
+
+# === Node / Frontend ===
+node_modules/
+.next/
