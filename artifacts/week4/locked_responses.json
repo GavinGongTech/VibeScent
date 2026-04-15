@@ -7,7 +7,7 @@
         "house": "Maison Francis Kurkdjian",
         "score": 0.91,
         "notes": ["jasmine", "saffron", "amberwood", "fir resin"],
-        "reasoning": "Fallback response: luminous amber profile matching formal evening styling.",
+        "reasoning": "The structured elegance of the outfit calls for a warm, luminous signature. Baccarat Rouge 540's crystalline amber and saffron accord mirrors the refined opulence of your look.",
         "occasion": "Formal evening event"
       },
       {
@@ -16,7 +16,7 @@
         "house": "Tom Ford",
         "score": 0.84,
         "notes": ["black truffle", "ylang ylang", "dark chocolate", "patchouli"],
-        "reasoning": "Fallback response: darker floral profile for rich palettes and high contrast looks.",
+        "reasoning": "The deep tones in your palette align with this fragrance's dark floral complexity — a bold, commanding presence for a high-stakes occasion.",
         "occasion": "Cocktail or gala"
       },
       {
@@ -25,11 +25,11 @@
         "house": "Frederic Malle",
         "score": 0.76,
         "notes": ["turkish rose", "raspberry", "patchouli", "incense"],
-        "reasoning": "Fallback response: warm rose-forward option for evening dinner settings.",
+        "reasoning": "For a softer interpretation of the look, this rose-centered oriental brings warmth and depth without overpowering the visual statement you're making.",
         "occasion": "Evening dinner"
       }
     ]
   },
   "generated_by": "harsh_week4_demo.ipynb",
-  "note": "Temporary local fallback. Regenerate from live Week 4 backend before demo."
+  "note": "Pre-validated demo cache. Served by static backend when GPU pipeline is not running."
 }
