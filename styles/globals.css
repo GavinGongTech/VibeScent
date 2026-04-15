@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  /* Color Palette */
+  --color-bg: #0a0a0a;
+  --color-surface: #111111;
+  --color-border: #2a2a2a;
+  --color-gold: #c9a96e;
+  --color-gold-dim: #8b6914;
+  --color-ink: #f5f0e8;
+  --color-muted: #888070;
+  --color-overlay: rgba(201, 169, 110, 0.06);
+
+  /* Typography */
+  --font-serif: var(--font-cormorant), Georgia, serif;
+  --font-sans: var(--font-dm-sans), sans-serif;
+  --font-mono: var(--font-dm-mono), monospace;
+
+  /* Custom Utilities */
+  --tracking-widest: 0.2em;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Apply the elegant serif to all headings */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-serif);
+    font-weight: 400;
+  }
+}
