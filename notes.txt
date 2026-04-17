@@ -1,0 +1,7 @@
+Here is how we run this model:
+merge_datasets.py          →  data/processed/vibescent_unified.csv
+embed_fragrances.py        →  embeddings/fragrance_embeddings.npy
+cluster_fragrances.py      →  data/processed/vibescent_clustered.csv
+                              models/kmeans_fragrance_model.pkl
+label_cluster_vibes.py     →  models/cluster_vibe_mapping.json
+test_vibe_pipeline.py      →  (prints validation results)
