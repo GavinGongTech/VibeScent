@@ -17,7 +17,7 @@ export default function ResultsPanel({ results, loading }: ResultsPanelProps) {
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="w-full h-70 border border-border bg-surface rounded-sm relative overflow-hidden"
+            className="w-full h-96 border border-border bg-surface rounded-sm relative overflow-hidden"
           >
             {/* Elegant shimmer effect */}
             <motion.div

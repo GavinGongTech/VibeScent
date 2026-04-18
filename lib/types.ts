@@ -25,4 +25,8 @@ export interface FragranceRecommendation {
   notes: string[];
   reasoning: string;
   occasion: string;
+  price?: string;
+  purchaseUrl?: string;
+  store?: string;
+  thumbnail?: string | null;
 }
