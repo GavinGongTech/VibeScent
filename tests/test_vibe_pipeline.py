@@ -5,11 +5,8 @@ Run this after label_cluster_vibes.py to check that the vibe space makes sense.
 
 import numpy as np
 import pandas as pd
-import json
 from label_cluster_vibes import (
     load_cluster_vibes,
-    get_fragrance_vibe,
-    VibeVector,
     VIBE_DIMENSIONS,
 )
 
@@ -31,7 +28,7 @@ def inspect_cluster(cluster_id, n=5):
     print(f"CLUSTER {cluster_id}  ({len(members)} fragrances)")
     print(f"{'=' * 60}")
     print(f"Vibe: {vibe.model_dump()}")
-    print(f"\nSample fragrances:")
+    print("\nSample fragrances:")
     for _, r in members.head(n).iterrows():
         print(f"  • {r['name']} ({r.get('brand', '?')})")
         print(f"    Notes: {r.get('top_notes', 'N/A')}")
