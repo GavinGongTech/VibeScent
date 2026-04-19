@@ -100,7 +100,7 @@ if __name__ == "__main__":
     model = SentenceTransformer('all-MiniLM-L6-v2') 
     
     # Load your actual CSV here: df = pd.read_csv('your_fragrance_db.csv')
-    df = pd.read_csv('../data/processed/mock_fragrances.csv')
+    df = pd.read_csv('../data/mock_fragrances.csv')
     
     # Notice we can use wildly abstract descriptions now
     user_event_input = {

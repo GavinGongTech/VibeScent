@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+serpapi
+python-dotenv
+requests
+sentence-transformers
+scikit-learn
+pandas
+open-clip-torch
+pillow
