@@ -2,43 +2,7 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-def create_mock_database():
-    """Creates a mock DataFrame based on the CSV schema for testing."""
-    data = [
-        {
-            'Name': 'Midnight Jazz',
-            'Formality': 0.8,
-            'Season': 'Winter',
-            'Gender': 'Male',
-            'Time_of_Day': 'Night',
-            'Frequency': 'Occasionally',
-            'Longevity': 'Long',
-            'Notes': 'Atlas cedar, Moroccan rose | Moroccan cannabis, Saffron, Spices, Tobacco, Vanilla | Amber, Frankincense, Leather, Oud, Patchouli, Resins, Zarbot | Accords: Spicy, Woody, Floral, Creamy'
-        },
-        {
-            'Name': 'Winter Pine',
-            'Formality': 0.3,
-            'Season': 'Winter',
-            'Gender': 'Male',
-            'Time_of_Day': 'Day',
-            'Frequency': 'Often',
-            'Longevity': 'Long',
-            'Notes': 'Pine needles, crisp mint | White musk, light woods | Accords: Fresh, Green, Cold'
-        },
-        {
-            'Name': 'Cozy Cabin',
-            'Formality': 0.3,
-            'Season': 'Winter',
-            'Gender': 'Male',
-            'Time_of_Day': 'Day',
-            'Frequency': 'Often',
-            'Longevity': 'Long',
-            'Notes': 'Warm cinnamon, roasted chestnuts | Bourbon vanilla, dark chocolate | Accords: Gourmand, Sweet, Warm'
-        }
-    ]
-    return pd.DataFrame(data)
-
-def find_top_fragrances_semantic(df, user_input, ai_model):
+def recommend_fragrances(df, user_input, ai_model):
     """
     Partitions the dataframe using categorical keys, then uses an AI language 
     model to calculate semantic similarity for the nuanced vibe.
@@ -116,7 +80,7 @@ if __name__ == "__main__":
     
     print("\nRunning Semantic Search...")
     # Pass the pre-loaded model into the function
-    results = find_top_fragrances_semantic(df, user_event_input, model)
+    results = recommend_fragrances(df, user_event_input, model)
     
     print("\nTop Recommendations:\n")
     if isinstance(results, str):

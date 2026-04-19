@@ -1,6 +1,8 @@
 import os
 import json
 from pathlib import Path
+import base64
+from io import BytesIO
 
 import torch
 import torch.nn.functional as F
@@ -186,53 +188,22 @@ def initialize_model():
     prompt_embs = build_prompt_embeddings(vibes, model, processor, device)
     print("[ML] Initialization complete!", flush=True)
 
-# Maps each context field value to the vibe label used in FRAGRANCE_DB target_vibes
-_CONTEXT_VIBE_MAP: dict[str, dict[str, str]] = {
-    "eventType": {
-        "Gala":        "formal",
-        "Date Night":  "formal",
-        "Casual":      "casual",
-        "Business":    "smart casual",
-        "Wedding":     "formal",
-        "Festival":    "casual",
-    },
-    "timeOfDay": {
-        "Morning":   "day",
-        "Afternoon": "day",
-        "Evening":   "night",
-        "Night":     "night",
-    },
-    "mood": {
-        "Bold":       "formal",
-        "Subtle":     "casual",
-        "Fresh":      "spring",
-        "Warm":       "fall",
-        "Mysterious": "night",
-    },
-}
-
-
-def _context_to_vibes(context: dict) -> list[str]:
-    """Convert a context dict from the API into a list of vibe label strings."""
-    vibes: list[str] = []
-    for field, mapping in _CONTEXT_VIBE_MAP.items():
-        value = context.get(field)
-        if value and value in mapping:
-            vibes.append(mapping[value])
-    return vibes
-
-
-def get_recommendations(img: Image.Image, context: dict | None = None) -> list:
-    """Runs a single image through CLIP and returns top 3 fragrances.
-
-    Args:
-        img: PIL Image of the outfit.
-        context: Optional dict with keys eventType, timeOfDay, mood.
-                 Each matching vibe adds +1 to a fragrance's match_score.
+def extract_vibe_dictionary(base64_string: str, user_text: str) -> tuple[dict, str]:
     """
+    Decodes the Next.js image, runs it through the pre-loaded CLIP model, 
+    and formats the detected labels into the exact dictionary schema 
+    expected by the semantic recommender.
+    """
+    # 1. Decode the base64 image from Next.js
+    if "," in base64_string:
+        base64_string = base64_string.split(",")[1]
+    image_data = base64.b64decode(base64_string)
+    img = Image.open(BytesIO(image_data)).convert("RGB")
+
     print("[ML] Extracting visual features...", flush=True)
     img_embs = encode_images([img], model, processor, device)
 
+    # 2. Get raw classification IDs
     raw_labels = {
         "formal":    score_classification(img_embs, prompt_embs["formal"])[0],
         "season":    score_classification(img_embs, prompt_embs["season"])[0],
@@ -241,40 +212,29 @@ def get_recommendations(img: Image.Image, context: dict | None = None) -> list:
         "frequency": score_classification(img_embs, prompt_embs["frequency"])[0],
     }
 
-    detected_vibes = [LABEL_MAPS[dim][raw_labels[dim]] for dim in raw_labels]
+    # 3. Map IDs to string labels
+    detected_vibes = {dim: LABEL_MAPS[dim][raw_labels[dim]] for dim in raw_labels}
     print(f"[ML] Detected vibes: {detected_vibes}", flush=True)
 
-    context_vibes = _context_to_vibes(context) if context else []
-    if context_vibes:
-        print(f"[ML] Context vibes: {context_vibes}", flush=True)
+    # 4. Map string labels to the exact format your Pandas dataframe expects
+    formality_map = {"casual": 0.3, "smart casual": 0.5, "formal": 0.8}
+    freq_map = {"occasional": "Occasionally", "everyday": "Often"}
+    gender_map = {"male": "Male", "female": "Female", "neutral": "Unisex"}
 
-    scored_fragrances = []
-    for frag in FRAGRANCE_DB:
-        target = set(frag["target_vibes"])
-        match_score = len(set(detected_vibes).intersection(target))
-        # Boost score for each context vibe that appears in this fragrance's targets
-        match_score += len(set(context_vibes).intersection(target))
-        confidence = min(0.95, 0.50 + (match_score * 0.10))
+    user_event_input = {
+        'Name': 'Curated Session',
+        'Formality': formality_map.get(detected_vibes['formal'], 0.5),
+        'Season': detected_vibes['season'].capitalize(),
+        'Gender': gender_map.get(detected_vibes['gender'], "Unisex"),
+        'Time_of_Day': detected_vibes['time'].capitalize(),
+        'Frequency': freq_map.get(detected_vibes['frequency'], "Often"),
+        'Longevity': 'Long', # CLIP doesn't assess this, default to Long
+        'Description': user_text # Inject the frontend text box directly!
+    }
 
-        scored_fragrances.append({
-            "name": frag["name"],
-            "house": frag["house"],
-            "score": round(confidence, 2),
-            "notes": frag["notes"],
-            "reasoning": (
-                f"For a {detected_vibes[1]} {detected_vibes[0]} look, "
-                f"{frag['name']} by {frag['house']} earns its place — "
-                f"{frag['description']}."
-            ),
-            "occasion": frag["occasion"],
-            "match_score": match_score,
-        })
+    clip_reasoning = (
+        f"Our vision model analyzed your look and detected a {detected_vibes['time']}time "
+        f"{detected_vibes['season']} aesthetic."
+    )
 
-    scored_fragrances.sort(key=lambda x: x["match_score"], reverse=True)
-    top_3 = scored_fragrances[:3]
-
-    for i, f in enumerate(top_3):
-        f["rank"] = i + 1
-        del f["match_score"]
-
-    return top_3
+    return user_event_input, clip_reasoning

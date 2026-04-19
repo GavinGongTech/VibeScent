@@ -1,79 +1,92 @@
-import base64
-import io
-import os
-from contextlib import asynccontextmanager
-from typing import Optional
-
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from PIL import Image
-import clip_zero_shot
+import pandas as pd
+from sentence_transformers import SentenceTransformer
 
+# 1. Imports are correct
+from recommender import recommend_fragrances
+from clip_zero_shot import initialize_model, extract_vibe_dictionary
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("\n" + "=" * 50)
-    print("VIBESCENT WEB SERVER BOOTING UP", flush=True)
-    print("=" * 50 + "\n", flush=True)
-    clip_zero_shot.initialize_model()
-    yield
+app = FastAPI()
 
+# ==========================================
+# WARM BOOT: Load AI & Data globally
+# ==========================================
+print("--- BOOTING ML PIPELINES ---")
 
-app = FastAPI(title="ScentAI Model API", lifespan=lifespan)
+# 🚨 THE FIX: Actually call the function to wake up CLIP! 🚨
+initialize_model()
 
-_allowed_origins = os.getenv(
-    "ALLOWED_ORIGINS", "http://localhost:3000"
-).split(",")
+print("Loading Text Embedding Model...")
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2') 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
-)
+print("Loading Fragrance Database...")
+fragrance_df = pd.read_csv('../data/mock_fragrances.csv') 
 
-
-class ContextInput(BaseModel):
-    eventType: Optional[str] = None
-    timeOfDay: Optional[str] = None
-    mood: Optional[str] = None
-
-
+# ==========================================
+# PYDANTIC SCHEMA
+# ==========================================
 class RecommendRequest(BaseModel):
-    image: str
+    image: str       
     mimeType: str
-    context: ContextInput
+    context: str = "" 
 
-
-@app.get("/health")
-async def health():
-    return {"status": "ok", "model_loaded": clip_zero_shot.model is not None}
-
-
+# ==========================================
+# MAIN PIPELINE ENDPOINT
+# ==========================================
 @app.post("/predict")
-async def predict_fragrance(req: RecommendRequest):
+async def predict(request: RecommendRequest):
     try:
-        print("\n" + "*" * 40, flush=True)
-        print("WEB: Request received. Processing image...", flush=True)
+        # STEP 1: Vision - Pass the image and text to CLIP to build the dictionary
+        user_event_input, clip_reasoning = extract_vibe_dictionary(request.image, request.context)
 
-        raw = req.image
-        image_data = base64.b64decode(raw.split(",")[1] if "," in raw else raw)
-        img = Image.open(io.BytesIO(image_data)).convert("RGB")
+        # ---------------------------------------------------------
+        # 🖨️ PRINT 1: THE CLIP VISION OUTPUT
+        # ---------------------------------------------------------
+        print("\n" + "="*50)
+        print("👁️  PHASE 1: CLIP VISION MODULE OUTPUT")
+        print("="*50)
+        print("Extracted Vibe Dictionary:")
+        for key, value in user_event_input.items():
+            print(f"  - {key}: {value}")
+        print(f"\nGenerated Reasoning String:\n  {clip_reasoning}")
+        print("="*50 + "\n")
 
-        context = req.context.model_dump(exclude_none=True)
-        recommendations = clip_zero_shot.get_recommendations(img, context=context)
+        # STEP 2: Semantic Search
+        # 🚨 THE FIX: Changed from find_top_fragrances_semantic to recommend_fragrances 🚨
+        results_df = recommend_fragrances(fragrance_df, user_event_input, embedding_model)
 
-        print("WEB: Inference complete. Sending to Next.js.", flush=True)
-        print("*" * 40 + "\n", flush=True)
+        if isinstance(results_df, str):
+            raise HTTPException(status_code=404, detail=results_df)
+
+        # ---------------------------------------------------------
+        # 🖨️ PRINT 2: THE SEMANTIC RECOMMENDER OUTPUT
+        # ---------------------------------------------------------
+        print("\n" + "="*50)
+        print("🧠 PHASE 2: SEMANTIC RECOMMENDER OUTPUT")
+        print("="*50)
+        print(results_df[['Name', 'Similarity_Score']].to_string(index=False))
+        print("="*50 + "\n")
+
+        # STEP 3: Format Output
+        recommendations = []
+        for index, row in results_df.reset_index().iterrows():
+            recommendations.append({
+                "rank": index + 1,
+                "name": row['Name'],
+                "score": float(row['Similarity_Score']), 
+                "notes": row['Notes'].split(" | "), 
+                "reasoning": f"{clip_reasoning} Paired with your specific notes, this is a {round(row['Similarity_Score']*100)}% aesthetic match.",
+                "occasion": f"The {user_event_input['Season']} Edit"
+            })
 
         return {"recommendations": recommendations}
 
     except Exception as e:
-        print(f"Error: {str(e)}", flush=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
+        import traceback
+        print("\n" + "!"*50)
+        print("🚨 CRITICAL PIPELINE CRASH 🚨")
+        print("!"*50)
+        traceback.print_exc()
+        print("!"*50 + "\n")
+        raise HTTPException(status_code=500, detail="Internal Server Error during curation.")

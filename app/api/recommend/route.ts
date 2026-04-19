@@ -91,9 +91,10 @@ export async function POST(req: NextRequest) {
       return {
         ...frag,
         // Format the float price to a beautiful string, fallback if null
-        price: scrapedData?.price
-          ? `$${scrapedData.price.toFixed(2)}`
-          : "Price unavailable",
+        price:
+          typeof scrapedData?.price === "number"
+            ? `$${scrapedData.price.toFixed(2)}`
+            : scrapedData?.price || "Price unavailable",
 
         // Map the exact keys from your python dictionary
         purchaseUrl: scrapedData?.url || "#",
