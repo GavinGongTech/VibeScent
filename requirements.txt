@@ -1,9 +1,0 @@
-torch
-torchvision
-transformers
-open-clip-torch
-Pillow
-wandb
-scikit-learn
-numpy
-tqdm
