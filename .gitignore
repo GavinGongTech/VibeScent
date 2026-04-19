@@ -32,6 +32,7 @@ checkpoints/
 
 # === Local logs and upload bundles ===
 *.log
+logs/
 artifacts/colab_upload_bundle/
 artifacts/colab_upload_bundle.tar.gz
 
