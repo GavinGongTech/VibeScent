@@ -48,7 +48,7 @@ export default function ResultsPanel({ results, loading }: ResultsPanelProps) {
 
   // Placeholder State (Empty)
   return (
-    <div className="w-full h-full min-h-150 border border-dashed border-border rounded-sm flex items-center justify-center bg-surface/30">
+    <div className="w-full h-full border border-dashed border-border rounded-sm flex items-center justify-center bg-surface/30">
       <div className="text-center">
         <div className="w-8 h-px bg-gold/50 mx-auto mb-6" />
         <p className="font-serif text-2xl text-muted italic">

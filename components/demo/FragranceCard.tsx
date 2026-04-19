@@ -32,7 +32,7 @@ export default function FragranceCard({
       <div className="absolute inset-0 bg-overlay opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
       {/* Left Column: Product Thumbnail */}
-      <div className="w-full md:w-1/3 shrink-0 flex items-center justify-center bg-white border border-border/50 rounded-sm overflow-hidden relative min-h-[250px]">
+      <div className="w-full md:w-1/3 shrink-0 flex items-center justify-center bg-white border border-border/50 rounded-sm overflow-hidden relative min-h-62.5">
         {fragrance.thumbnail ? (
           /* Using standard img tag because Next.js Image requires configuring external domains */
           // eslint-disable-next-line @next/next/no-img-element
@@ -63,15 +63,6 @@ export default function FragranceCard({
               <h2 className="font-serif text-3xl text-ink leading-none">
                 {fragrance.name}
               </h2>
-            </div>
-
-            <div className="text-right hidden sm:block">
-              <span className="font-mono text-xs tracking-widest text-muted uppercase block mb-1">
-                Confidence
-              </span>
-              <span className="font-mono text-xl text-gold">
-                {Math.round(fragrance.score * 100)}%
-              </span>
             </div>
           </div>
 

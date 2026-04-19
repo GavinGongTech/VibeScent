@@ -7,12 +7,12 @@ import ContextForm from "@/components/demo/ContextForm";
 import SubmitButton from "@/components/demo/SubmitButton";
 import ResultsPanel from "@/components/demo/ResultsPanel";
 import { getRecommendations } from "@/lib/recommend";
-import { ContextInput, FragranceRecommendation } from "@/lib/types";
+import { FragranceRecommendation } from "@/lib/types";
 
 export default function DemoPage() {
   const [image, setImage] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
-  const [context, setContext] = useState<ContextInput>({});
+  const [context, setContext] = useState("");
   const [results, setResults] = useState<FragranceRecommendation[] | null>(
     null,
   );
@@ -94,9 +94,8 @@ export default function DemoPage() {
         </div>
 
         {/* Right Column: Results */}
-        <div className="lg:col-span-7">
-          {/* Sticky positioning keeps the results visible while scrolling long input forms on desktop */}
-          <div className="sticky top-32">
+        <div className="lg:col-span-7 flex">
+          <div className="sticky top-32 w-full h-full">
             <ResultsPanel results={results} loading={loading} />
           </div>
         </div>
