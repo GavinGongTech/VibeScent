@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 load_dotenv(Path(__file__).parent / ".env")
 
-from perfume_scraper import search_perfumes  # noqa: E402 — must load env first
+from backend.perfume_scraper import search_perfumes  # noqa: E402 — must load env first
 
 app = FastAPI(title="ScentAI Scraper API")
 
