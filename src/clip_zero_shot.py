@@ -1,4 +1,5 @@
 import os
+
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 import argparse
@@ -29,6 +30,7 @@ MODEL_NAME = "openai/clip-vit-large-patch14"
 # Device
 # ---------------------------------------------------------------------------
 
+
 def get_device() -> torch.device:
     if torch.backends.mps.is_available():
         return torch.device("mps")
@@ -41,22 +43,32 @@ def get_device() -> torch.device:
 # Prompt encoding helpers
 # ---------------------------------------------------------------------------
 
+
 @torch.no_grad()
-def encode_texts(prompts: list[str], model: CLIPModel, processor: CLIPProcessor, device: torch.device) -> torch.Tensor:
+def encode_texts(
+    prompts: list[str], model: CLIPModel, processor: CLIPProcessor, device: torch.device
+) -> torch.Tensor:
     """Return L2-normalised text embeddings, shape (N, D)."""
-    inputs = processor(text=prompts, return_tensors="pt", padding=True, truncation=True).to(device)
+    inputs = processor(
+        text=prompts, return_tensors="pt", padding=True, truncation=True
+    ).to(device)
     feats = model.get_text_features(**inputs)
-    if hasattr(feats, 'pooler_output'):
+    if hasattr(feats, "pooler_output"):
         feats = feats.pooler_output
     return F.normalize(feats, dim=-1)
 
 
 @torch.no_grad()
-def encode_images(images: list[Image.Image], model: CLIPModel, processor: CLIPProcessor, device: torch.device) -> torch.Tensor:
+def encode_images(
+    images: list[Image.Image],
+    model: CLIPModel,
+    processor: CLIPProcessor,
+    device: torch.device,
+) -> torch.Tensor:
     """Return L2-normalised image embeddings, shape (N, D)."""
     inputs = processor(images=images, return_tensors="pt").to(device)
     feats = model.get_image_features(**inputs)
-    if hasattr(feats, 'pooler_output'):
+    if hasattr(feats, "pooler_output"):
         feats = feats.pooler_output
     return F.normalize(feats, dim=-1)
 
@@ -65,7 +77,10 @@ def encode_images(images: list[Image.Image], model: CLIPModel, processor: CLIPPr
 # Pre-encode all prompts from vibes.json
 # ---------------------------------------------------------------------------
 
-def build_prompt_embeddings(vibes: dict, model: CLIPModel, processor: CLIPProcessor, device: torch.device) -> dict:
+
+def build_prompt_embeddings(
+    vibes: dict, model: CLIPModel, processor: CLIPProcessor, device: torch.device
+) -> dict:
     """
     Returns a dict with pre-computed text embeddings for every dimension.
 
@@ -80,7 +95,9 @@ def build_prompt_embeddings(vibes: dict, model: CLIPModel, processor: CLIPProces
     for dim in ("formal", "season", "gender", "time", "frequency"):
         embeddings[dim] = {}
         for class_id, info in vibes[dim]["classes"].items():
-            embeddings[dim][class_id] = encode_texts(info["prompts"], model, processor, device)
+            embeddings[dim][class_id] = encode_texts(
+                info["prompts"], model, processor, device
+            )
 
     return embeddings
 
@@ -88,6 +105,7 @@ def build_prompt_embeddings(vibes: dict, model: CLIPModel, processor: CLIPProces
 # ---------------------------------------------------------------------------
 # Per-image scoring
 # ---------------------------------------------------------------------------
+
 
 def score_classification(img_embs: torch.Tensor, class_embs: dict) -> list[int]:
     """
@@ -109,10 +127,10 @@ def score_classification(img_embs: torch.Tensor, class_embs: dict) -> list[int]:
 # ---------------------------------------------------------------------------
 
 LABEL_MAPS = {
-    "formal":    {0: "casual", 1: "smart casual", 2: "formal"},
-    "season":    {1: "spring", 2: "summer", 3: "fall", 4: "winter"},
-    "gender":    {0: "male", 1: "female", 2: "neutral"},
-    "time":      {0: "day", 1: "night"},
+    "formal": {0: "casual", 1: "smart casual", 2: "formal"},
+    "season": {1: "spring", 2: "summer", 3: "fall", 4: "winter"},
+    "gender": {0: "male", 1: "female", 2: "neutral"},
+    "time": {0: "day", 1: "night"},
     "frequency": {0: "occasional", 1: "everyday"},
 }
 
@@ -121,8 +139,12 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 def main():
     parser = argparse.ArgumentParser(description="CLIP zero-shot vibe labeling")
-    parser.add_argument("--input", type=str, default=None,
-                        help="Path to a single image or folder. Omit to batch-label the train/ directory.")
+    parser.add_argument(
+        "--input",
+        type=str,
+        default=None,
+        help="Path to a single image or folder. Omit to batch-label the train/ directory.",
+    )
     args = parser.parse_args()
 
     device = get_device()
@@ -147,12 +169,16 @@ def main():
         if not input_path.exists():
             raise FileNotFoundError(f"Input not found: {input_path}")
         if input_path.is_dir():
-            image_paths = sorted(p for p in input_path.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS)
+            image_paths = sorted(
+                p for p in input_path.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS
+            )
         else:
             image_paths = [input_path]
         save_to_file = False
     else:
-        image_paths = sorted(p for p in TRAIN_DIR.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS)
+        image_paths = sorted(
+            p for p in TRAIN_DIR.rglob("*") if p.suffix.lower() in IMAGE_EXTENSIONS
+        )
         save_to_file = True
 
     print(f"Found {len(image_paths)} image(s)")
@@ -166,7 +192,9 @@ def main():
 
     results = {}
 
-    for batch_start in tqdm(range(0, len(image_paths), BATCH_SIZE), desc="Labeling", unit="batch"):
+    for batch_start in tqdm(
+        range(0, len(image_paths), BATCH_SIZE), desc="Labeling", unit="batch"
+    ):
         batch_paths = image_paths[batch_start : batch_start + BATCH_SIZE]
 
         images, valid_paths = [], []
@@ -181,20 +209,20 @@ def main():
         if not images:
             continue
 
-        img_embs = encode_images(images, model, processor, device)   # (B, D)
+        img_embs = encode_images(images, model, processor, device)  # (B, D)
 
-        formal_labels    = score_classification(img_embs, prompt_embs["formal"])
-        season_labels    = score_classification(img_embs, prompt_embs["season"])
-        gender_labels    = score_classification(img_embs, prompt_embs["gender"])
-        time_labels      = score_classification(img_embs, prompt_embs["time"])
+        formal_labels = score_classification(img_embs, prompt_embs["formal"])
+        season_labels = score_classification(img_embs, prompt_embs["season"])
+        gender_labels = score_classification(img_embs, prompt_embs["gender"])
+        time_labels = score_classification(img_embs, prompt_embs["time"])
         frequency_labels = score_classification(img_embs, prompt_embs["frequency"])
 
         for i, path in enumerate(valid_paths):
             raw = {
-                "formal":    formal_labels[i],
-                "season":    season_labels[i],
-                "gender":    gender_labels[i],
-                "time":      time_labels[i],
+                "formal": formal_labels[i],
+                "season": season_labels[i],
+                "gender": gender_labels[i],
+                "time": time_labels[i],
                 "frequency": frequency_labels[i],
             }
             results[path.name] = raw

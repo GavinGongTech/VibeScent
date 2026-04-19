@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import base64
-import io
 import sys
 import types
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -135,7 +134,9 @@ def test_decode_b64_to_cnn_tensor_calls_pipeline_in_order() -> None:
     opened = fake_pil_image_class.open.return_value
     opened.convert.assert_called_once_with("RGB")
     converted = opened.convert.return_value
-    converted.resize.assert_called_once_with((224, 224), fake_pil_image_class.Resampling.BICUBIC)
+    converted.resize.assert_called_once_with(
+        (224, 224), fake_pil_image_class.Resampling.BICUBIC
+    )
 
     # to_tensor received the resized PIL image
     fake_tf.to_tensor.assert_called_once_with(converted.resize.return_value)
@@ -156,6 +157,4 @@ def test_decode_b64_to_cnn_tensor_calls_pipeline_in_order() -> None:
 def test_decode_b64_to_cnn_tensor_rejects_bad_input_before_pil() -> None:
     """ValueError from decode_b64_image_bytes propagates before PIL is imported."""
     with pytest.raises(ValueError, match="Unsupported mime type"):
-        ip.decode_b64_to_cnn_tensor(
-            base64.b64encode(b"x").decode("ascii"), "image/gif"
-        )
+        ip.decode_b64_to_cnn_tensor(base64.b64encode(b"x").decode("ascii"), "image/gif")

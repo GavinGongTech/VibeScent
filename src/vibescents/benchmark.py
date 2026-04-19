@@ -33,7 +33,9 @@ QWEN_BENCHMARK_MODEL = "Qwen/Qwen3.5-27B-GPTQ-Int4"
 def consolidate_case_drafts(drafts: Iterable[BenchmarkCaseDraft]) -> BenchmarkCaseLabel:
     draft_list = list(drafts)
     if not draft_list:
-        raise ValueError("At least one draft is required to consolidate benchmark labels.")
+        raise ValueError(
+            "At least one draft is required to consolidate benchmark labels."
+        )
     if len({draft.case_id for draft in draft_list}) != 1:
         raise ValueError("All drafts must refer to the same case_id.")
 
@@ -46,9 +48,13 @@ def consolidate_case_drafts(drafts: Iterable[BenchmarkCaseDraft]) -> BenchmarkCa
         target_day_night=majority_vote([label.target_day_night for label in labels]),
         target_fresh_warm=majority_vote([label.target_fresh_warm for label in labels]),
         acceptable_accords=frequent_items(label.acceptable_accords for label in labels),
-        acceptable_note_families=frequent_items(label.acceptable_note_families for label in labels),
+        acceptable_note_families=frequent_items(
+            label.acceptable_note_families for label in labels
+        ),
         disallowed_traits=frequent_items(label.disallowed_traits for label in labels),
-        example_good_fragrances=frequent_items(label.example_good_fragrances for label in labels),
+        example_good_fragrances=frequent_items(
+            label.example_good_fragrances for label in labels
+        ),
         confidence=round(mean(label.confidence for label in labels), 3),
     )
 
@@ -66,7 +72,9 @@ class GeminiBenchmarkLabelClient:
     def __post_init__(self) -> None:
         self.settings = self.settings or Settings.from_env()
         if not self.settings.api_key:
-            raise ValueError("Set GEMINI_API_KEY or GOOGLE_API_KEY before calling the Gemini API.")
+            raise ValueError(
+                "Set GEMINI_API_KEY or GOOGLE_API_KEY before calling the Gemini API."
+            )
         from google import genai
 
         self._client = genai.Client(api_key=self.settings.api_key)
@@ -166,11 +174,15 @@ class BenchmarkGenerator:
     def _resolve_client(self) -> BenchmarkLabelClient:
         if self.provider == "gemini":
             return GeminiBenchmarkLabelClient(
-                model_name=self.model_name or self.settings.reranker_model or GEMINI_BENCHMARK_MODEL,
+                model_name=self.model_name
+                or self.settings.reranker_model
+                or GEMINI_BENCHMARK_MODEL,
                 settings=self.settings,
             )
         if self.provider == "qwen":
-            return QwenOutlinesBenchmarkLabelClient(model_name=self.model_name or QWEN_BENCHMARK_MODEL)
+            return QwenOutlinesBenchmarkLabelClient(
+                model_name=self.model_name or QWEN_BENCHMARK_MODEL
+            )
         raise ValueError(f"Unsupported provider: {self.provider}")
 
     def generate_case_labels(
@@ -189,7 +201,9 @@ class BenchmarkGenerator:
             for attempt in range(5):
                 try:
                     label = self._client.generate(case_id=case_id, brief=brief)
-                    drafts.append(BenchmarkCaseDraft(case_id=case_id, brief=brief, labels=label))
+                    drafts.append(
+                        BenchmarkCaseDraft(case_id=case_id, brief=brief, labels=label)
+                    )
                     break
                 except Exception as exc:
                     retryable = "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)

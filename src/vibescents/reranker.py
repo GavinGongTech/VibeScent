@@ -19,7 +19,9 @@ class GeminiReranker:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or Settings.from_env()
         if not self.settings.api_key:
-            raise ValueError("Set GEMINI_API_KEY or GOOGLE_API_KEY before calling the Gemini API.")
+            raise ValueError(
+                "Set GEMINI_API_KEY or GOOGLE_API_KEY before calling the Gemini API."
+            )
 
         from google import genai
 
@@ -34,7 +36,9 @@ class GeminiReranker:
     ) -> RerankResponse:
         from google.genai import types
 
-        parts = [types.Part.from_text(text=self._build_prompt(occasion_text, candidates))]
+        parts = [
+            types.Part.from_text(text=self._build_prompt(occasion_text, candidates))
+        ]
         if image_path is not None:
             image_file = Path(image_path)
             parts.insert(

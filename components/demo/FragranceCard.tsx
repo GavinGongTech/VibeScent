@@ -86,10 +86,10 @@ export default function FragranceCard({
           {/* Reasoning */}
           <div className="mb-8">
             <span className="font-sans text-xs tracking-widest text-muted uppercase block mb-2">
-              Curator's Note — {fragrance.occasion}
+              Curator&apos;s Note — {fragrance.occasion}
             </span>
             <p className="font-serif text-lg leading-relaxed text-ink/80 italic">
-              "{fragrance.reasoning}"
+              &quot;{fragrance.reasoning}&quot;
             </p>
           </div>
         </div>
@@ -101,6 +101,11 @@ export default function FragranceCard({
             <p className="font-sans text-xs tracking-widest text-muted uppercase">
               {store}
             </p>
+            {fragrance.inBudget === true && (
+              <p className="font-mono text-xs tracking-widest text-gold uppercase mt-1">
+                Within Budget
+              </p>
+            )}
           </div>
 
           {hasLink ? (

@@ -4,6 +4,7 @@ Decodes base64-encoded images and prepares normalized tensors for CNN inference.
 Heavy imports (PIL, torch, torchvision) are guarded inside function bodies so
 the module loads on CPU-only machines for testing and linting.
 """
+
 from __future__ import annotations
 
 import base64
@@ -84,8 +85,11 @@ def decode_b64_to_cnn_tensor(image_b64: str, mime_type: str) -> Any:
 
     from PIL import Image  # noqa: PLC0415
     import torchvision.transforms.functional as TF  # noqa: PLC0415
+
     pil_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    pil_image = pil_image.resize((CNN_IMAGE_SIZE, CNN_IMAGE_SIZE), Image.Resampling.BICUBIC)
+    pil_image = pil_image.resize(
+        (CNN_IMAGE_SIZE, CNN_IMAGE_SIZE), Image.Resampling.BICUBIC
+    )
 
     # to_tensor: PIL (H, W, C) uint8 → float32 Tensor (C, H, W) in [0, 1]
     tensor = TF.to_tensor(pil_image)

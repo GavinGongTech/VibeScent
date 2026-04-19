@@ -51,7 +51,7 @@ export default function ModelPage() {
                 passed through a vision transformer (CLIP) to convert visual
                 data into embeddings. The text is simultaneously passed through
                 a sentence transformer (Qwen3-Embedding) to create embeddings
-                that represent context and the user's intent.
+                that represent context and the user&apos;s intent.
               </p>
             </div>
           </div>
@@ -100,7 +100,7 @@ export default function ModelPage() {
               <p className="font-sans text-muted leading-relaxed text-lg font-light">
                 The model executes a similarity search using cosine similarity
                 to identify fragrances with similar vibes. The top-p fragrances
-                closest to the user's desired aesthetic are recommended to the
+                closest to the user&apos;s desired aesthetic are recommended to the
                 user.
               </p>
             </div>

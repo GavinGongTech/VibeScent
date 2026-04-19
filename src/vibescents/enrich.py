@@ -80,7 +80,11 @@ class GeminiEnrichmentClient:
                 return EnrichmentSchemaV2.model_validate_json(response.text)
             except Exception as exc:
                 last_error = exc
-                retryable = "429" in str(exc) or "503" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc)
+                retryable = (
+                    "429" in str(exc)
+                    or "503" in str(exc)
+                    or "RESOURCE_EXHAUSTED" in str(exc)
+                )
                 if retryable and attempt < 4:
                     delay = min(60.0, 2.0 ** (attempt + 1))
                     time.sleep(delay)
@@ -203,7 +207,9 @@ def _resolve_client(
     if provider == "gemini":
         return GeminiEnrichmentClient(model_name=model_name or GEMINI_ENRICHMENT_MODEL)
     if provider == "qwen":
-        return QwenOutlinesEnrichmentClient(model_name=model_name or QWEN_ENRICHMENT_MODEL)
+        return QwenOutlinesEnrichmentClient(
+            model_name=model_name or QWEN_ENRICHMENT_MODEL
+        )
     raise ValueError(f"Unsupported provider: {provider}")
 
 
@@ -283,7 +289,11 @@ def _build_retrieval_text(row: pd.Series) -> str:
         parts.append(f"Accords: {row['main_accords']}")
 
     note_parts = []
-    for column, label in [("top_notes", "Top"), ("middle_notes", "Heart"), ("base_notes", "Base")]:
+    for column, label in [
+        ("top_notes", "Top"),
+        ("middle_notes", "Heart"),
+        ("base_notes", "Base"),
+    ]:
         value = row.get(column)
         if pd.notna(value):
             note_parts.append(f"{label}: {value}")
@@ -350,15 +360,21 @@ def main() -> None:
     import argparse
     import os
 
-    parser = argparse.ArgumentParser(description="Enrich fragrance dataset with vibe attributes")
+    parser = argparse.ArgumentParser(
+        description="Enrich fragrance dataset with vibe attributes"
+    )
     parser.add_argument("--input-csv", required=True)
     parser.add_argument("--output-csv", required=True)
     parser.add_argument("--max-rows", type=int, default=None)
     parser.add_argument("--resume-from", type=int, default=0)
     parser.add_argument("--provider", choices=["qwen", "gemini"], default="qwen")
-    parser.add_argument("--model", default=None, help="Override provider default model.")
+    parser.add_argument(
+        "--model", default=None, help="Override provider default model."
+    )
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--failures-log", default=None, help="Optional JSONL path for failed rows.")
+    parser.add_argument(
+        "--failures-log", default=None, help="Optional JSONL path for failed rows."
+    )
     args = parser.parse_args()
 
     checkpoint_path = args.output_csv + ".ckpt"
@@ -377,7 +393,7 @@ def main() -> None:
 
     if "fragrance_id" not in df.columns:
         df.insert(0, "fragrance_id", df.index.astype(str))
-        print(f"Added fragrance_id column (0 to {len(df)-1})")
+        print(f"Added fragrance_id column (0 to {len(df) - 1})")
 
     print(
         "Enriching rows "

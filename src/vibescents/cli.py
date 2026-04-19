@@ -5,7 +5,11 @@ from pathlib import Path
 
 from vibescents.benchmark import BenchmarkGenerator, consolidate_case_drafts
 from vibescents.io_utils import dump_json, ensure_dir, load_dataframe, load_json
-from vibescents.pipelines import embed_occasions, embed_text_frame, retrieve_with_multimodal_query
+from vibescents.pipelines import (
+    embed_occasions,
+    embed_text_frame,
+    retrieve_with_multimodal_query,
+)
 from vibescents.reranker import GeminiReranker
 from vibescents.schemas import RetrievalCandidate
 
@@ -20,7 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     embed_csv.add_argument("--text-column", required=True)
     embed_csv.add_argument("--output-dir", required=True)
     embed_csv.add_argument("--model")
-    embed_csv.add_argument("--input-type", default="document", help="Voyage input_type: 'document' or 'query'")
+    embed_csv.add_argument(
+        "--input-type",
+        default="document",
+        help="Voyage input_type: 'document' or 'query'",
+    )
 
     embed_occasions_parser = subparsers.add_parser("embed-occasions")
     embed_occasions_parser.add_argument("--input-json", required=True)
@@ -45,7 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--briefs-json", required=True)
     benchmark.add_argument("--output-json", required=True)
     benchmark.add_argument("--runs", type=int, default=3)
-    benchmark.add_argument("--model", default=None, help="Override the generation model (default: settings.reranker_model)")
+    benchmark.add_argument(
+        "--model",
+        default=None,
+        help="Override the generation model (default: settings.reranker_model)",
+    )
 
     return parser
 
@@ -85,7 +97,9 @@ def main() -> None:
 
     if args.command == "rerank":
         raw_candidates = load_json(args.candidate_json)
-        candidates = [RetrievalCandidate.model_validate(item) for item in raw_candidates]
+        candidates = [
+            RetrievalCandidate.model_validate(item) for item in raw_candidates
+        ]
         response = GeminiReranker().rerank(
             occasion_text=args.occasion_text,
             image_path=args.image_path,
@@ -101,7 +115,10 @@ def main() -> None:
         settings = None
         if args.model:
             from vibescents.settings import Settings
-            settings = Settings(api_key=Settings.from_env().api_key, reranker_model=args.model)
+
+            settings = Settings(
+                api_key=Settings.from_env().api_key, reranker_model=args.model
+            )
         generator = BenchmarkGenerator(settings=settings)
         consolidated = []
         for item in briefs:
@@ -117,6 +134,7 @@ def main() -> None:
         return
 
     raise ValueError(f"Unsupported command: {args.command}")
+
 
 if __name__ == "__main__":
     main()

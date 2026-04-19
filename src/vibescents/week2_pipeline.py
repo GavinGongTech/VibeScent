@@ -253,10 +253,7 @@ def embed_corpus(
         parts.append(normalized_batch)
         delta_parts.append(normalized_batch)
 
-        if (
-            checkpoint_dir is not None
-            and (batch_idx + 1) % _CHECKPOINT_INTERVAL == 0
-        ):
+        if checkpoint_dir is not None and (batch_idx + 1) % _CHECKPOINT_INTERVAL == 0:
             save_embeddings(
                 checkpoint_dir / f"embeddings_partial_{batch_idx}.npy",
                 np.vstack(delta_parts),
@@ -400,9 +397,7 @@ def select_tier_b(
             "The source dataset may be too sparse for Tier B."
         )
 
-    selected = relaxed_df.sort_values("rating_count", ascending=False).head(
-        target_size
-    )
+    selected = relaxed_df.sort_values("rating_count", ascending=False).head(target_size)
     print(
         f"Tier B: {len(selected)} rows selected (relaxed filter, "
         f"{len(relaxed_df)} candidates)."
@@ -434,10 +429,7 @@ def validate_enrichment(
             f"Enrichment success rate {rate:.4f} ({success}/{total}) "
             f"is below the required {min_success_rate:.2%} threshold."
         )
-    print(
-        f"Enrichment validation passed: {rate:.2%} success "
-        f"({success}/{total} rows)."
-    )
+    print(f"Enrichment validation passed: {rate:.2%} success ({success}/{total} rows).")
 
 
 # ---------------------------------------------------------------------------
@@ -461,9 +453,7 @@ def smoke_test_enrichment(
     prompt = _build_prompt(sample_row)
     result = client.generate(prompt)
     if not isinstance(result, EnrichmentSchemaV2):
-        raise TypeError(
-            f"Expected EnrichmentSchemaV2, got {type(result).__name__}."
-        )
+        raise TypeError(f"Expected EnrichmentSchemaV2, got {type(result).__name__}.")
     if not result.vibe_sentence.strip():
         raise ValueError("Smoke test failed: vibe_sentence is empty.")
     if not result.likely_season:

@@ -15,7 +15,9 @@ from vibescents.schemas import RecommendRequest, RecommendResponse
 
 
 class RecommendationEngine(Protocol):
-    def recommend(self, *, request: RecommendRequest, image_bytes: bytes) -> RecommendResponse:
+    def recommend(
+        self, *, request: RecommendRequest, image_bytes: bytes
+    ) -> RecommendResponse:
         """Generate recommendation response for the frontend contract."""
 
 
@@ -26,7 +28,9 @@ class UnconfiguredRecommendationEngine:
         "set_recommendation_engine() before calling /recommend."
     )
 
-    def recommend(self, *, request: RecommendRequest, image_bytes: bytes) -> RecommendResponse:
+    def recommend(
+        self, *, request: RecommendRequest, image_bytes: bytes
+    ) -> RecommendResponse:
         raise RuntimeError(self.message)
 
 

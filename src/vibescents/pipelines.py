@@ -8,7 +8,11 @@ import pandas as pd
 from vibescents.embeddings import GeminiEmbedder, Qwen3VLMultimodalEmbedder
 from vibescents.io_utils import dump_json, ensure_dir, save_dataframe, save_embeddings
 from vibescents.schemas import RetrievalCandidate
-from vibescents.similarity import cosine_similarity_matrix, normalize_rows, top_k_indices
+from vibescents.similarity import (
+    cosine_similarity_matrix,
+    normalize_rows,
+    top_k_indices,
+)
 
 
 def embed_text_frame(
@@ -47,7 +51,9 @@ def embed_occasions(
 
     save_embeddings(output_path / "embeddings.npy", embeddings)
     save_dataframe(output_path / "metadata.csv", metadata)
-    save_dataframe(output_path / "similarity.csv", matrix.reset_index(names="occasion_id"))
+    save_dataframe(
+        output_path / "similarity.csv", matrix.reset_index(names="occasion_id")
+    )
     _save_heatmap(matrix.to_numpy(), ids, output_path / "similarity_heatmap.png")
     return embeddings
 
@@ -64,8 +70,12 @@ def retrieve_with_multimodal_query(
 ) -> list[RetrievalCandidate]:
     output_path = ensure_dir(Path(output_dir))
     embedder = Qwen3VLMultimodalEmbedder()
-    doc_embeddings = embedder.embed_multimodal_documents(frame[text_column].fillna("").astype(str).tolist())
-    query_embedding = embedder.embed_multimodal_query(text=occasion_text, image_path=image_path)
+    doc_embeddings = embedder.embed_multimodal_documents(
+        frame[text_column].fillna("").astype(str).tolist()
+    )
+    query_embedding = embedder.embed_multimodal_query(
+        text=occasion_text, image_path=image_path
+    )
     scores = cosine_similarity_matrix(query_embedding, doc_embeddings)[0]
     selected = top_k_indices(scores, top_k)
 
@@ -82,7 +92,9 @@ def retrieve_with_multimodal_query(
             name=row["name"] if "name" in top_rows.columns else None,
             brand=row["brand"] if "brand" in top_rows.columns else None,
             retrieval_text=str(row[text_column]),
-            display_text=row["display_text"] if "display_text" in top_rows.columns else None,
+            display_text=row["display_text"]
+            if "display_text" in top_rows.columns
+            else None,
             baseline_score=float(row["multimodal_score"]),
             metadata={
                 key: _python_scalar(row[key])

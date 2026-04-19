@@ -166,10 +166,13 @@ class Qwen3VLEmbedder:
         _load_in_8bit = kwargs.pop("load_in_8bit", False)
         if _load_in_8bit:
             from transformers import BitsAndBytesConfig as _BnbCfg
+
             self.model = Qwen3VLForEmbedding.from_pretrained(
-                model_name_or_path, trust_remote_code=True,
+                model_name_or_path,
+                trust_remote_code=True,
                 quantization_config=_BnbCfg(load_in_8bit=True),
-                device_map="auto", **kwargs,
+                device_map="auto",
+                **kwargs,
             )
         else:
             self.model = Qwen3VLForEmbedding.from_pretrained(
@@ -215,13 +218,17 @@ class Qwen3VLEmbedder:
     ) -> List[Dict]:
         if instruction:
             instruction = instruction.strip()
-            if instruction and not unicodedata.category(instruction[-1]).startswith("P"):
+            if instruction and not unicodedata.category(instruction[-1]).startswith(
+                "P"
+            ):
                 instruction = instruction + "."
         content: list = []
         conversation = [
             {
                 "role": "system",
-                "content": [{"type": "text", "text": instruction or self.default_instruction}],
+                "content": [
+                    {"type": "text", "text": instruction or self.default_instruction}
+                ],
             },
             {"role": "user", "content": content},
         ]
@@ -233,26 +240,36 @@ class Qwen3VLEmbedder:
             if isinstance(video, list):
                 video_content = video
                 if self.num_frames is not None or self.max_frames is not None:
-                    video_content = sample_frames(video_content, self.num_frames, self.max_frames)
+                    video_content = sample_frames(
+                        video_content, self.num_frames, self.max_frames
+                    )
                 video_content = [
                     ("file://" + ele if isinstance(ele, str) else ele)
                     for ele in video_content
                 ]
                 video_kwargs_used = video_kwargs
             elif isinstance(video, str):
-                video_content = video if video.startswith(("http://", "https://")) else "file://" + video
+                video_content = (
+                    video
+                    if video.startswith(("http://", "https://"))
+                    else "file://" + video
+                )
                 video_kwargs_used = {
                     "fps": fps or self.fps,
                     "max_frames": max_frames or self.max_frames,
                 }
             else:
                 raise TypeError(f"Unrecognized video type: {type(video)}")
-            content.append({"type": "video", "video": video_content, **video_kwargs_used})
+            content.append(
+                {"type": "video", "video": video_content, **video_kwargs_used}
+            )
         if image:
             if isinstance(image, Image.Image):
                 image_content = image
             elif isinstance(image, str):
-                image_content = image if image.startswith(("http", "oss")) else "file://" + image
+                image_content = (
+                    image if image.startswith(("http", "oss")) else "file://" + image
+                )
             else:
                 raise TypeError(f"Unrecognized image type: {type(image)}")
             content.append(
@@ -267,7 +284,9 @@ class Qwen3VLEmbedder:
             content.append({"type": "text", "text": text})
         return conversation
 
-    def _preprocess_inputs(self, conversations: List[List[Dict]]) -> Dict[str, torch.Tensor]:
+    def _preprocess_inputs(
+        self, conversations: List[List[Dict]]
+    ) -> Dict[str, torch.Tensor]:
         text = self.processor.apply_chat_template(
             conversations, add_generation_prompt=True, tokenize=False
         )
@@ -335,7 +354,9 @@ class Qwen3VLEmbedder:
         processed = self._preprocess_inputs(conversations)
         processed = {k: v.to(self.model.device) for k, v in processed.items()}
         outputs = self.forward(processed)
-        embeddings = self._pooling_last(outputs["last_hidden_state"], outputs["attention_mask"])
+        embeddings = self._pooling_last(
+            outputs["last_hidden_state"], outputs["attention_mask"]
+        )
         if normalize:
             embeddings = F.normalize(embeddings, p=2, dim=-1)
         return embeddings

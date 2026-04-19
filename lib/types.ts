@@ -2,14 +2,7 @@
 export interface RecommendRequest {
   image: string; // base64-encoded image data
   mimeType: string; // "image/jpeg" | "image/png" | "image/webp"
-  context: ContextInput;
-}
-
-export interface ContextInput {
-  eventType?: string;
-  timeOfDay?: string;
-  mood?: string;
-  customNotes?: string;
+  context: string;
 }
 
 // Output returned by the model
