@@ -23,7 +23,7 @@ app = FastAPI(title="ScentAI Model API", lifespan=lifespan)
 class RecommendRequest(BaseModel):
     image: str       
     mimeType: str
-    context: dict
+    context: str
 
 @app.post("/predict")
 async def predict_fragrance(req: RecommendRequest):
