@@ -1,6 +1,6 @@
-# Darren — Fragrance Data Lead
+# Darren — Fragrance Data Lead + Frontend Lead
 
-Last updated: April 12, 2026
+Last updated: April 18, 2026
 
 ---
 
@@ -8,64 +8,90 @@ Last updated: April 12, 2026
 
 You own:
 
-- Fragrance dataset selection and sourcing
+- Fragrance dataset sourcing and scraping
 - Schema definition — canonical field names, types, and meaning
 - Data loading and normalization
 - Missing-value handling
 - Canonical fragrance table export
+- Next.js frontend (ScentAI)
+- Web scraper integration
 
 ---
 
-## Status (April 12)
+## Current State (April 18)
 
-**Week 2 delivery: complete.** `data/vibescent_500.csv` is the canonical 500-row fragrance table. Schema is documented. Downstream branches are consuming it without manual cleanup.
+**Data delivery: complete.**
+`data/vibescent_500.csv` (canonical 500-row sample) and the full 35,889-row merged dataset (`data/vibescent_enriched.csv` / `data/processed/vibescent_unified.csv`) are in the repo. Downstream branches are consuming without manual cleanup.
+
+**Frontend: complete.**
+Next.js app with Fragrantica scraper integrated. Commit `cf444a8 Integrated webscraper to front end`.
 
 ---
 
-## Required Schema
+## Dataset
 
-Every row in the canonical fragrance table must contain:
+**Primary source:** Fragrantica (`data/raw/fragrantica_clean.csv`) — scraped with semicolon-delimited CSV, ~35,000+ rows.
+**Secondary source:** Parfumo (`data/raw/parfumo_data_clean.csv`) — merged into unified dataset.
+**Merged corpus:** `data/processed/vibescent_unified.csv` — 35,889 rows, deduplicated, canonical schema applied.
+
+### Canonical Schema
 
 | Field | Type | Description |
 |---|---|---|
-| `fragrance_id` | string | Unique identifier, stable across all branches |
+| `fragrance_id` | string | Unique identifier — stable across all branches, never recycled |
 | `brand` | string | Fragrance house or brand |
 | `name` | string | Fragrance name |
-| `notes` | string | Raw note string (top / heart / base) |
-| `accords` | string | Comma-separated main accords |
-| `season_tags` | string | Available season metadata if present in source |
-| `occasion_tags` | string | Available occasion metadata if present in source |
-| `gender` | string | Gender metadata if present in source |
-| `embedding_text` | string | Raw note concatenation (Karan's original field, kept for RAW baseline comparison) |
+| `top_notes` | string | Top note list (evaporates first, 5–15 min) |
+| `middle_notes` | string | Heart note list (main body, 20–60 min) |
+| `base_notes` | string | Base note list (dry-down, hours) |
+| `main_accords` | string | Comma-separated genre descriptors (e.g. woody, floral, spicy) |
+| `rating_count` | float | Number of Fragrantica reviews — used for Tier B selection |
+| `rating_value` | float | Average rating score |
+| `gender` | string | Gender metadata if present |
+| `concentration` | string | EDP / EDT / Parfum etc. |
+| `year` | float | Release year |
+| `source` | string | `fragrantica` or `parfumo` |
+| `embedding_text` | string | Raw note concatenation (Karan's original field — kept for RAW baseline comparison) |
 
-The following enriched fields are added downstream by `enrich.py` (Harsh) — Darren does not generate these:
-
-- `likely_season`, `likely_occasion`, `formality`, `fresh_warm`, `day_night`, `character_tags`, `vibe_sentence`, `retrieval_text`, `display_text`
-
----
-
-## Week 3 Plan
-
-- Improve coverage only if it does not break the canonical schema (e.g. filling high-missingness fields for fragrances that appear in benchmark cases)
-- Support targeted enrichment where the benchmark exposes gaps
-- Do not merge a second dataset unless one fully clean table already exists
+The following enriched fields are added **downstream by `enrich.py` (Harsh)** — Darren does not generate these:
+`likely_season`, `likely_occasion`, `formality`, `fresh_warm`, `day_night`, `character_tags`, `vibe_sentence`, `retrieval_text`
 
 ---
 
-## Constraints
+## Frontend
 
-- Do not merge multiple messy datasets before one clean table exists
-- Do not let schema drift — field names must be consistent across all branches
-- `fragrance_id` must be stable and never recycled — downstream `.npy` matrices reference row order
+**Stack:** Next.js 14 (App Router), Tailwind CSS, Framer Motion, TypeScript.
+
+**Pages:**
+- `/` — Landing page with hero, about strip, footer
+- `/demo` — Two-column layout: image upload + context form (left), fragrance results (right)
+- `/model` — Pipeline explainer page
+
+**Scraper integration:** `scraper/` directory — scrapes Fragrantica fragrance pages and returns structured JSON. Integrated into the frontend as of `cf444a8`.
+
+**API stub:** `app/api/recommend/route.ts` — POST `/api/recommend` returns mock `FragranceRecommendation[]`. Replace this block when the real model backend is ready.
+
+---
+
+## Key Constraints
+
+- `fragrance_id` must be stable and never recycled — downstream `.npy` embedding matrices reference row order. If row order changes, all embedding artifacts are invalidated.
+- Do not let schema drift — field names must be consistent across all branches. Any new fields go through this doc or are documented as enrichment fields.
+- Do not merge a second dataset unless one fully clean table already exists.
 
 ---
 
 ## Required Outputs
 
-- `data/vibescent_500.csv` ✓
-- Source dataset decision note (which dataset, why, what was dropped)
-- Data quality summary (missingness rates per field)
-- Confirmed `fragrance_id` stability guarantee
+| Artifact | Status |
+|---|---|
+| `data/vibescent_500.csv` — canonical 500-row sample | ✅ |
+| `data/processed/vibescent_unified.csv` — full 35,889-row merged corpus | ✅ |
+| `data/raw/fragrantica_clean.csv` — raw Fragrantica scrape | ✅ |
+| `data/raw/parfumo_data_clean.csv` — raw Parfumo data | ✅ |
+| Next.js frontend | ✅ |
+| Scraper integration | ✅ |
+| Data quality summary (missingness rates per field) | ❌ Pending |
 
 ---
 
@@ -74,13 +100,5 @@ The following enriched fields are added downstream by `enrich.py` (Harsh) — Da
 **Others depend on you:**
 - Harsh → `vibescent_500.csv` for enrichment and embedding ✓
 - Karan → canonical fragrance table for text generation ✓
-- Neil → cleaned fragrance table for image retrieval
-
----
-
-## Success Criteria
-
-- The team has one stable, versioned fragrance table
-- `fragrance_id` is unique and stable
-- Downstream branches consume the table without manual cleanup
-- Schema does not drift across branches — any additions go through you or are documented as enrichment fields
+- Neil → cleaned fragrance table for image retrieval ✓
+- All branches → stable `fragrance_id` guarantee ✓

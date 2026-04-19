@@ -118,11 +118,53 @@ def initialize_model():
     prompt_embs = build_prompt_embeddings(vibes, model, processor, device)
     print("[ML] Initialization complete!", flush=True)
 
-def get_recommendations(img: Image.Image) -> list:
-    """Runs a single image through CLIP and returns top 3 fragrances."""
+# Maps each context field value to the vibe label used in FRAGRANCE_DB target_vibes
+_CONTEXT_VIBE_MAP: dict[str, dict[str, str]] = {
+    "eventType": {
+        "Gala":        "formal",
+        "Date Night":  "formal",
+        "Casual":      "casual",
+        "Business":    "smart casual",
+        "Wedding":     "formal",
+        "Festival":    "casual",
+    },
+    "timeOfDay": {
+        "Morning":   "day",
+        "Afternoon": "day",
+        "Evening":   "night",
+        "Night":     "night",
+    },
+    "mood": {
+        "Bold":       "formal",
+        "Subtle":     "casual",
+        "Fresh":      "spring",
+        "Warm":       "fall",
+        "Mysterious": "night",
+    },
+}
+
+
+def _context_to_vibes(context: dict) -> list[str]:
+    """Convert a context dict from the API into a list of vibe label strings."""
+    vibes: list[str] = []
+    for field, mapping in _CONTEXT_VIBE_MAP.items():
+        value = context.get(field)
+        if value and value in mapping:
+            vibes.append(mapping[value])
+    return vibes
+
+
+def get_recommendations(img: Image.Image, context: dict | None = None) -> list:
+    """Runs a single image through CLIP and returns top 3 fragrances.
+
+    Args:
+        img: PIL Image of the outfit.
+        context: Optional dict with keys eventType, timeOfDay, mood.
+                 Each matching vibe adds +1 to a fragrance's match_score.
+    """
     print("[ML] Extracting visual features...", flush=True)
     img_embs = encode_images([img], model, processor, device)
-    
+
     raw_labels = {
         "formal":    score_classification(img_embs, prompt_embs["formal"])[0],
         "season":    score_classification(img_embs, prompt_embs["season"])[0],
@@ -130,15 +172,22 @@ def get_recommendations(img: Image.Image) -> list:
         "time":      score_classification(img_embs, prompt_embs["time"])[0],
         "frequency": score_classification(img_embs, prompt_embs["frequency"])[0],
     }
-    
+
     detected_vibes = [LABEL_MAPS[dim][raw_labels[dim]] for dim in raw_labels]
     print(f"[ML] Detected vibes: {detected_vibes}", flush=True)
 
+    context_vibes = _context_to_vibes(context) if context else []
+    if context_vibes:
+        print(f"[ML] Context vibes: {context_vibes}", flush=True)
+
     scored_fragrances = []
     for frag in FRAGRANCE_DB:
-        match_score = len(set(detected_vibes).intersection(set(frag["target_vibes"])))
-        confidence = min(0.95, 0.50 + (match_score * 0.10)) 
-        
+        target = set(frag["target_vibes"])
+        match_score = len(set(detected_vibes).intersection(target))
+        # Boost score for each context vibe that appears in this fragrance's targets
+        match_score += len(set(context_vibes).intersection(target))
+        confidence = min(0.95, 0.50 + (match_score * 0.10))
+
         scored_fragrances.append({
             "name": frag["name"],
             "house": frag["house"],
@@ -146,7 +195,7 @@ def get_recommendations(img: Image.Image) -> list:
             "notes": frag["notes"],
             "reasoning": f"Our vision model detected a {detected_vibes[0]} and {detected_vibes[1]} aesthetic. The notes of {frag['notes'][0]} perfectly complement this energy.",
             "occasion": frag["occasion"],
-            "match_score": match_score
+            "match_score": match_score,
         })
 
     scored_fragrances.sort(key=lambda x: x["match_score"], reverse=True)

@@ -38,13 +38,16 @@ const FALLBACK_RESPONSES: Record<string, RecommendResponse> = {
   },
 };
 
+const DEFAULT_BUDGET_USD = 500.0;
+
 function fallbackForRequest(_body: RecommendRequest): RecommendResponse {
   return FALLBACK_RESPONSES.default;
 }
 
 export async function POST(req: NextRequest) {
+  let body: RecommendRequest;
   try {
-    const body = (await req.json()) as RecommendRequest;
+    body = (await req.json()) as RecommendRequest;
 
     // 1. Call the ML Model (Port 8000)
     const mlResponse = await fetch("http://127.0.0.1:8000/predict", {
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         perfumes: perfumeNames,
-        budget: 500.0,
+        budget: DEFAULT_BUDGET_USD,
       }),
     });
 
@@ -96,6 +99,7 @@ export async function POST(req: NextRequest) {
         purchaseUrl: scrapedData?.url || "#",
         store: scrapedData?.store || "Retailer unavailable",
         thumbnail: scrapedData?.thumbnail || null,
+        inBudget: scrapedData?.in_budget ?? false,
       };
     });
 
@@ -103,9 +107,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ recommendations: finalRecommendations });
   } catch (error) {
     console.error("API Route Error:", error);
-    return NextResponse.json(
-      { error: "Failed to generate recommendation" },
-      { status: 500 },
-    );
+    return NextResponse.json(fallbackForRequest(body!));
   }
 }

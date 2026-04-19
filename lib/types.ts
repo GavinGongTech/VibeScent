@@ -2,7 +2,14 @@
 export interface RecommendRequest {
   image: string; // base64-encoded image data
   mimeType: string; // "image/jpeg" | "image/png" | "image/webp"
-  context: string;
+  context: ContextInput;
+}
+
+export interface ContextInput {
+  eventType?: string;
+  timeOfDay?: string;
+  mood?: string;
+  customNotes?: string;
 }
 
 // Output returned by the model
@@ -22,4 +29,5 @@ export interface FragranceRecommendation {
   purchaseUrl?: string;
   store?: string;
   thumbnail?: string | null;
+  inBudget?: boolean;
 }

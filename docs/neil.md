@@ -1,6 +1,6 @@
 # Neil — Image Retrieval Lead
 
-Last updated: April 12, 2026
+Last updated: April 18, 2026
 
 ---
 
@@ -8,65 +8,114 @@ Last updated: April 12, 2026
 
 You own:
 
-- Image-to-fragrance retrieval
-- Image preprocessing
+- CNN-CLIP hybrid image classifier (3 classification heads)
+- Qwen3-VL-Embedding-8B integration (`qwen3_vl_embedding.py`)
+- Image preprocessing pipeline
 - CLIP-only, CNN-only, and hybrid branch comparison
 
 ---
 
-## Status: AT RISK
+## Current State (April 18)
 
-**`Image_Processing` branch is empty as of April 8.** None of the Week 2 deliverables have been completed.
+**Delivered.** The CNN-CLIP hybrid model is trained, checkpointed, and integrated.
 
-This blocks:
-- The 4-signal fusion formula (`final_score = 0.30 * text + 0.25 * multimodal + 0.30 * image + 0.15 * structured`)
-- The CLIP vs CNN vs hybrid comparison required by the project
-- Week 3 integration
+| Artifact | Path | Status |
+|---|---|---|
+| CNN-CLIP hybrid model definition | `models/cnn_clip_hybrid.py` | ✅ |
+| Trained checkpoint | `artifacts/colab_upload_bundle/checkpoints/cnn/best.pt` | ✅ |
+| Qwen3-VL-Embedding-8B inner embedder | `src/vibescents/qwen3_vl_embedding.py` | ✅ |
+| Image preprocessing | `src/vibescents/image_preprocess.py` | ✅ |
+| CLIP zero-shot labeler | `src/clip_zero_shot.py` | ✅ |
+| Inference script | `src/inference.py` | ✅ |
 
-If Neil cannot deliver by Week 3 start, Gavin must decide: (a) assign image retrieval to another branch, or (b) officially adopt the 2-signal fallback formula. Do not silently let this block integration.
-
----
-
-## Model Choices
-
-| Branch | Model |
-|---|---|
-| CLIP-only | OpenCLIP |
-| CNN-only | ResNet50 |
-| Hybrid | `image_score = 0.70 * clip_score + 0.30 * cnn_score` |
-
-CLIP should carry most of the semantic image-text matching load. CNN features add visual structure without destabilizing the pipeline.
+Harsh's `image_scoring.py` wraps the CNN checkpoint via `NeilCNNWrapper` and uses it in the fusion pipeline. The integration is complete.
 
 ---
 
-## Week 2 Deliverables (all pending)
+## Architecture
 
-- CLIP branch: image → fragrance similarity using OpenCLIP
-- CNN branch: image → fragrance similarity using ResNet50
-- Hybrid branch: score fusion of CLIP and CNN
-- Save image embeddings as `.npy`
-- Save image-to-fragrance score table as `.csv`
-- Produce nearest-neighbor sanity check (visually similar outfits should rank similarly)
-- One short note on failure modes
+**CNN-CLIP Hybrid** — combines visual structure (ResNet-50) with semantic understanding (CLIP ViT-L/14):
+
+```
+outfit image (224 × 224, normalized with CLIP mean/std)
+    │
+    ├── ResNet-50  →  2,048-d feature vector
+    └── CLIP ViT-L/14  →  768-d feature vector
+                │
+           concatenate
+                │
+         Linear projection
+                │
+         256-d shared trunk
+                │
+    ┌───────────┼───────────┐
+    │           │           │
+formal_head  season_head  time_head
+ (3-class)   (4-class)   (2-class)
+    │           │           │
+ softmax     softmax     softmax
+    │           │           │
+P(casual/    P(spring/   P(day/
+ semi/        summer/     night)
+ formal)      fall/
+              winter)
+```
+
+**Why ResNet-50 + CLIP instead of just CLIP?**
+CLIP alone produces an opaque embedding — you can query it but you can't inspect what it sees.
+The classification heads give you explicit, debuggable predictions: *P(formal) = 0.83*.
+These map directly to the numeric enrichment attributes on fragrances, creating a shared attribute space between the outfit and the fragrance database.
 
 ---
 
-## Week 3 Plan
+## Training Details
 
-- Integrate the winning image branch into the late-fusion baseline
-- Compare image-only vs fused (text + image + multimodal) retrieval
-- Compare CLIP / CNN / hybrid behavior against the `Qwen3-VL-Embedding-8B` multimodal signal
-  - Note: the multimodal model has changed from `gemini-embedding-2` to `Qwen3-VL-Embedding-8B`. MMEB-V2 score 77.8 (#1). The comparison must show how much unique value the image branch adds on top of this stronger baseline.
+**Loss:** Per-head weighted CrossEntropyLoss — each head trains on its own classification target independently.
+
+**Pseudo-labels:** CLIP zero-shot pseudo-labeler (`src/clip_zero_shot.py`) generated training labels across all 5 vibe dimensions before fine-tuning. Ground truth annotations were expensive; zero-shot labels provided enough signal to train the classification heads.
+
+**Checkpoint format:** `best.pt` saves either full model state or `model_state_dict` key — `NeilCNNWrapper` in `image_scoring.py` handles both formats during load.
+
+---
+
+## How It Integrates Into the Pipeline
+
+At inference time, `image_scoring.py:NeilCNNWrapper`:
+
+1. Loads checkpoint with key-format fallback
+2. Runs forward pass, extracts 3 head outputs
+3. Returns `ImageHeadProbabilities(formal_probs, season_probs, time_probs)`
+
+`score_candidate_pool()` then scores each Tier B fragrance:
+```python
+score = P_formal[fragrance_formal_class]
+      × P_season[fragrance_season_class]
+      × P_time[fragrance_time_class]
+```
+
+Scores are min-max normalized across the pool and fed into the fusion formula as `sig_img`.
+
+---
+
+## Still Pending
+
+- **Comparison table:** CLIP-only vs CNN-only vs hybrid vs `Qwen3-VL-Embedding-8B` — required to justify the hybrid's value above each single-model baseline
+- **Image embeddings as `.npy`:** `artifacts/image_clip/embeddings.npy`, `artifacts/image_cnn/embeddings.npy`
+- **Failure mode note:** edge cases where the CNN misclassifies (e.g. avant-garde fashion that reads as casual despite formal intent)
 
 ---
 
 ## Required Outputs
 
-- `artifacts/image_clip/embeddings.npy` + scores
-- `artifacts/image_cnn/embeddings.npy` + scores
-- `artifacts/image_hybrid/scores.csv`
-- CLIP vs CNN vs hybrid comparison table
-- One short note on failure modes and edge cases
+| Artifact | Status |
+|---|---|
+| `models/cnn_clip_hybrid.py` | ✅ |
+| `artifacts/colab_upload_bundle/checkpoints/cnn/best.pt` | ✅ |
+| `src/vibescents/qwen3_vl_embedding.py` | ✅ |
+| CLIP-only vs CNN-only vs hybrid comparison table | ❌ Pending |
+| `artifacts/image_clip/embeddings.npy` | ❌ Pending |
+| `artifacts/image_cnn/embeddings.npy` | ❌ Pending |
+| Failure mode analysis | ❌ Pending |
 
 ---
 
@@ -74,18 +123,8 @@ CLIP should carry most of the semantic image-text matching load. CNN features ad
 
 **You depend on:**
 - Darren → cleaned fragrance table (`vibescent_500.csv`) ✓
-- Karan → `retrieval_text` and structured fragrance attributes
-- Gavin → benchmark case file
 
 **Others depend on you:**
-- Gavin → image retrieval scores for late-fusion integration
-- Harsh → image scores for fusion formula
-
----
-
-## Success Criteria
-
-- Visually similar outfits score similarly against the fragrance corpus
-- Image-only retrieval produces plausible fragrance candidates (not random)
-- The hybrid branch is clearly defined, implemented, and benchmarked against CLIP-only and CNN-only
-- The image branch contributes unique signal even when `Qwen3-VL-Embedding-8B` is added to the fusion
+- Harsh → CNN checkpoint for `NeilCNNWrapper` in `image_scoring.py` ✓
+- Harsh → `Qwen3VLMultimodalEmbedder` wraps your `qwen3_vl_embedding.py` ✓
+- Gavin → image retrieval scores for fusion integration
