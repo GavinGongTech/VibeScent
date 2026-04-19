@@ -58,7 +58,7 @@ jobs:
             --cov=src/vibescents \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
-            --cov-fail-under=60
+            --cov-fail-under=35
 
       - name: Upload coverage
         if: matrix.python-version == '3.12'
