@@ -82,9 +82,12 @@ def image_negative_log_likelihood(
     season_target = season_target_index(likely_season, head_probabilities["season"])
 
     nll = (
-        weights["formal"] * np.log(_safe_probability(head_probabilities["formal"], formal_target))
-        + weights["season"] * np.log(_safe_probability(head_probabilities["season"], season_target))
-        + weights["time"] * np.log(_safe_probability(head_probabilities["time"], time_target))
+        weights["formal"]
+        * np.log(_safe_probability(head_probabilities["formal"], formal_target))
+        + weights["season"]
+        * np.log(_safe_probability(head_probabilities["season"], season_target))
+        + weights["time"]
+        * np.log(_safe_probability(head_probabilities["time"], time_target))
     )
     return float(-nll)
 
@@ -174,7 +177,9 @@ def _coerce_head_outputs(raw: Any) -> dict[str, np.ndarray]:
         return {name: _to_numpy(raw[name]) for name in _HEAD_NAMES}
     if isinstance(raw, (tuple, list)) and len(raw) >= 3:
         return {name: _to_numpy(val) for name, val in zip(_HEAD_NAMES, raw[:3])}
-    raise ValueError("Unsupported CNN output format. Expected mapping or tuple/list with 3 heads.")
+    raise ValueError(
+        "Unsupported CNN output format. Expected mapping or tuple/list with 3 heads."
+    )
 
 
 def _to_numpy(value: Any) -> np.ndarray:
@@ -203,7 +208,9 @@ def _softmax_numpy(logits: np.ndarray) -> np.ndarray:
 
 def _safe_probability(probabilities: np.ndarray, target_index: int) -> float:
     if target_index < 0 or target_index >= probabilities.shape[0]:
-        raise ValueError(f"Target index {target_index} is out of bounds for shape {probabilities.shape}.")
+        raise ValueError(
+            f"Target index {target_index} is out of bounds for shape {probabilities.shape}."
+        )
     return float(np.clip(probabilities[target_index], _EPSILON, 1.0))
 
 

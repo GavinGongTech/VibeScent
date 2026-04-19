@@ -1,25 +1,29 @@
 import base64
 import io
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from PIL import Image
 import clip_zero_shot
 
-app = FastAPI(title="ScentAI Model API")
 
-@app.on_event("startup")
-def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     print("\n" + "="*50)
     print("VIBESCENT WEB SERVER BOOTING UP", flush=True)
     print("="*50 + "\n", flush=True)
-    
+
     # Tell the ML module to load the heavy weights into memory
     clip_zero_shot.initialize_model()
+    yield
+
+
+app = FastAPI(title="ScentAI Model API", lifespan=lifespan)
 
 class RecommendRequest(BaseModel):
     image: str       
     mimeType: str
-    context: str    
+    context: dict
 
 @app.post("/predict")
 async def predict_fragrance(req: RecommendRequest):
@@ -32,7 +36,7 @@ async def predict_fragrance(req: RecommendRequest):
         img = Image.open(io.BytesIO(image_data)).convert("RGB")
         
         # 2. Hand the image off to the ML module
-        recommendations = clip_zero_shot.get_recommendations(img)
+        recommendations = clip_zero_shot.get_recommendations(img, context=req.context)
         
         print("WEB: Inference complete. Sending to Next.js.", flush=True)
         print("*"*40 + "\n", flush=True)
@@ -42,3 +46,8 @@ async def predict_fragrance(req: RecommendRequest):
     except Exception as e:
         print(f"Error: {str(e)}", flush=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)

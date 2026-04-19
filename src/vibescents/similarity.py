@@ -12,7 +12,9 @@ def normalize_rows(matrix: np.ndarray) -> np.ndarray:
     return matrix / safe_norms
 
 
-def cosine_similarity_matrix(left: np.ndarray, right: np.ndarray | None = None) -> np.ndarray:
+def cosine_similarity_matrix(
+    left: np.ndarray, right: np.ndarray | None = None
+) -> np.ndarray:
     right_matrix = left if right is None else right
     return normalize_rows(left) @ normalize_rows(right_matrix).T
 

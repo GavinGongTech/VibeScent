@@ -17,8 +17,8 @@ def test_min_max_normalize_returns_zeros_for_constant_vector() -> None:
 
 
 def test_fuse_scores_uses_per_signal_normalization() -> None:
-    text = np.array([1.0, 3.0], dtype=np.float32)      # -> [0, 1]
-    image = np.array([20.0, 10.0], dtype=np.float32)   # -> [1, 0]
+    text = np.array([1.0, 3.0], dtype=np.float32)  # -> [0, 1]
+    image = np.array([20.0, 10.0], dtype=np.float32)  # -> [1, 0]
     fused = fuse_scores(
         {"text": text, "image": image},
         weights={"text": 0.5, "image": 0.5},
@@ -64,6 +64,8 @@ def test_grid_search_weights_does_not_double_normalize() -> None:
         "image": np.array([0.0, 1.0], dtype=np.float32),
     }
     grid = [{"text": 0.5, "image": 0.5}]
-    result = grid_search_weights(score_map, scorer=lambda s: float(s.sum()), weight_grid=grid)
+    result = grid_search_weights(
+        score_map, scorer=lambda s: float(s.sum()), weight_grid=grid
+    )
     expected = fuse_scores(score_map, weights={"text": 0.5, "image": 0.5})
     assert np.allclose(result.scores, expected)

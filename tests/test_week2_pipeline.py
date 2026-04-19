@@ -161,7 +161,9 @@ def test_check_disk_space_abort_raises_when_above_abort_pct() -> None:
 def test_check_disk_space_ok_does_not_raise_when_below_warn_pct() -> None:
     usage = _fake_disk_usage(100 * 1024**3, used_pct=50)
     with patch("shutil.disk_usage", return_value=usage):
-        w2.check_disk_space(path="/content", warn_pct=80, abort_pct=95)  # must not raise
+        w2.check_disk_space(
+            path="/content", warn_pct=80, abort_pct=95
+        )  # must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -257,10 +259,15 @@ def _make_df(
     base = {
         "fragrance_id": [str(i) for i in range(n)],
         "rating_count": list(range(n, 0, -1)),
-        "top_notes": [f"top_{i}" if (fill_notes or fill_relaxed_only) else None for i in range(n)],
+        "top_notes": [
+            f"top_{i}" if (fill_notes or fill_relaxed_only) else None for i in range(n)
+        ],
         "middle_notes": [f"mid_{i}" if fill_notes else None for i in range(n)],
         "base_notes": [f"base_{i}" if fill_notes else None for i in range(n)],
-        "main_accords": [f"accord_{i}" if (fill_notes or fill_relaxed_only) else None for i in range(n)],
+        "main_accords": [
+            f"accord_{i}" if (fill_notes or fill_relaxed_only) else None
+            for i in range(n)
+        ],
     }
     df = pd.DataFrame(base)
     if extra_empty > 0:
@@ -326,7 +333,9 @@ def test_validate_enrichment_fail_below_min_success_rate() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_embed_corpus_resume_returns_none_and_zero_for_empty_dir(tmp_path: Path) -> None:
+def test_embed_corpus_resume_returns_none_and_zero_for_empty_dir(
+    tmp_path: Path,
+) -> None:
     result, next_batch = w2.embed_corpus_resume(tmp_path)
     assert result is None
     assert next_batch == 0

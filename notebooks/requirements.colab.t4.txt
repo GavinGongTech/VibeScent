@@ -1,0 +1,11 @@
+# T4 lightweight path: Gemma 4 E4B int4 local enrichment
+# NO vllm — vllm pins transformers<5, Gemma 4 needs >=5.5; they conflict
+transformers>=5.5.0
+bitsandbytes>=0.45,<0.46
+accelerate>=1.3,<2.0
+sentence-transformers>=3.4,<4.0
+fastapi>=0.115,<1.0
+uvicorn>=0.34,<1.0
+pyngrok>=7.2,<8.0
+json_repair>=0.35,<1.0
+gradio>=5.0,<6.0

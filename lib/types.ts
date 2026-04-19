@@ -22,4 +22,5 @@ export interface FragranceRecommendation {
   purchaseUrl?: string;
   store?: string;
   thumbnail?: string | null;
+  inBudget?: boolean;
 }

@@ -70,7 +70,11 @@ def _build_torch_stub(state_dict: dict) -> types.ModuleType:
     cuda_mod = types.ModuleType("torch.cuda")
     cuda_mod.is_available = MagicMock(return_value=False)
     torch_mod.cuda = cuda_mod
-    torch_mod.no_grad = MagicMock(return_value=MagicMock(__enter__=lambda s, *a: None, __exit__=lambda s, *a: None))
+    torch_mod.no_grad = MagicMock(
+        return_value=MagicMock(
+            __enter__=lambda s, *a: None, __exit__=lambda s, *a: None
+        )
+    )
     torch_mod.load = MagicMock(return_value=state_dict)
     sys.modules.setdefault("torch", torch_mod)
     sys.modules.setdefault("torch.cuda", cuda_mod)
@@ -89,7 +93,10 @@ def test_from_checkpoint_loads_neil_model_state_dict_key(tmp_path: Path) -> None
     torch_stub.cuda.is_available = MagicMock(return_value=False)
 
     import unittest.mock as mock
-    with mock.patch.dict(sys.modules, {"torch": torch_stub, "torch.cuda": torch_stub.cuda}):
+
+    with mock.patch.dict(
+        sys.modules, {"torch": torch_stub, "torch.cuda": torch_stub.cuda}
+    ):
         wrapper = NeilCNNWrapper.from_checkpoint(
             tmp_path / "best.pt",
             model_builder=lambda: fake_model,
@@ -106,8 +113,11 @@ def test_from_checkpoint_also_handles_legacy_state_dict_key(tmp_path: Path) -> N
 
     fake_model = MagicMock()
     import unittest.mock as mock
-    with mock.patch.dict(sys.modules, {"torch": torch_stub, "torch.cuda": torch_stub.cuda}):
-        wrapper = NeilCNNWrapper.from_checkpoint(
+
+    with mock.patch.dict(
+        sys.modules, {"torch": torch_stub, "torch.cuda": torch_stub.cuda}
+    ):
+        NeilCNNWrapper.from_checkpoint(
             tmp_path / "best.pt",
             model_builder=lambda: fake_model,
         )
