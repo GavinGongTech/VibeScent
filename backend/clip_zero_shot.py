@@ -28,29 +28,97 @@ FRAGRANCE_DB = [
         "house": "Maison Francis Kurkdjian",
         "notes": ["jasmine", "saffron", "amberwood", "fir resin"],
         "target_vibes": ["formal", "night", "winter", "smart casual"],
-        "occasion": "Formal evening event"
+        "occasion": "Formal evening event",
+        "description": "crystalline amber and saffron create a luminous signature that commands every room",
     },
     {
         "name": "Black Orchid",
         "house": "Tom Ford",
         "notes": ["black truffle", "ylang ylang", "dark chocolate", "patchouli"],
         "target_vibes": ["formal", "night", "fall", "everyday"],
-        "occasion": "Cocktail or gala"
+        "occasion": "Cocktail or gala",
+        "description": "dark florals and truffle weave an intoxicating spell of opulence and mystery",
     },
     {
         "name": "Gypsy Water",
         "house": "Byredo",
         "notes": ["bergamot", "lemon", "pepper", "pine needles"],
         "target_vibes": ["casual", "day", "spring", "summer", "everyday"],
-        "occasion": "Casual daytime outing"
+        "occasion": "Casual daytime outing",
+        "description": "bergamot and pine needles open into a wanderer's trail — free, airy, and effortlessly cool",
     },
     {
         "name": "Santal 33",
         "house": "Le Labo",
         "notes": ["sandalwood", "cedarwood", "cardamom", "iris"],
         "target_vibes": ["smart casual", "day", "fall", "neutral"],
-        "occasion": "Creative office or coffee date"
-    }
+        "occasion": "Creative office or coffee date",
+        "description": "sandalwood and cedarwood ground the senses in warm, unhurried sophistication",
+    },
+    {
+        "name": "Sauvage",
+        "house": "Dior",
+        "notes": ["bergamot", "pepper", "ambroxan", "vetiver"],
+        "target_vibes": ["male", "smart casual", "casual", "everyday", "spring"],
+        "occasion": "Everyday signature",
+        "description": "ambroxan and fresh bergamot project clean charisma — modern masculinity at its most magnetic",
+    },
+    {
+        "name": "Light Blue",
+        "house": "Dolce & Gabbana",
+        "notes": ["Sicilian cedar", "apple", "bellflower", "white rose"],
+        "target_vibes": ["female", "casual", "day", "summer", "everyday"],
+        "occasion": "Summer day out",
+        "description": "Sicilian cedar and apple fizz into a breezy Mediterranean escape",
+    },
+    {
+        "name": "Chanel No. 5",
+        "house": "Chanel",
+        "notes": ["ylang-ylang", "jasmine", "rose", "musk"],
+        "target_vibes": ["female", "formal", "night", "winter", "occasional"],
+        "occasion": "Black tie or gala",
+        "description": "rose and ylang-ylang anchor an immortal feminine ideal — bold, powder-soft, timeless",
+    },
+    {
+        "name": "Acqua di Giò",
+        "house": "Giorgio Armani",
+        "notes": ["marine accord", "bergamot", "jasmine", "patchouli"],
+        "target_vibes": ["male", "casual", "day", "summer", "everyday"],
+        "occasion": "Warm-weather casual",
+        "description": "marine accord and bergamot breathe like an open sea — effortlessly casual and universally loved",
+    },
+    {
+        "name": "Oud Wood",
+        "house": "Tom Ford",
+        "notes": ["oud", "sandalwood", "rosewood", "amber"],
+        "target_vibes": ["smart casual", "night", "fall", "winter", "occasional"],
+        "occasion": "Intimate dinner or evening event",
+        "description": "rare oud and sandalwood smolder quietly beneath the surface, leaving a warm resinous trail",
+    },
+    {
+        "name": "Flowerbomb",
+        "house": "Viktor & Rolf",
+        "notes": ["jasmine", "rose", "orchid", "patchouli"],
+        "target_vibes": ["female", "smart casual", "night", "fall", "occasional"],
+        "occasion": "Evening drinks or date night",
+        "description": "jasmine and rose explode into an unapologetically lush floral bomb — daring and magnetic",
+    },
+    {
+        "name": "Aventus",
+        "house": "Creed",
+        "notes": ["pineapple", "bergamot", "birch", "musk"],
+        "target_vibes": ["male", "formal", "smart casual", "winter", "occasional"],
+        "occasion": "Boardroom or formal evening",
+        "description": "birch smoke and pineapple burst into a bold chypre that wears success like a second skin",
+    },
+    {
+        "name": "Libre",
+        "house": "Yves Saint Laurent",
+        "notes": ["mandarin", "lavender", "orange blossom", "vanilla"],
+        "target_vibes": ["female", "formal", "smart casual", "night", "fall"],
+        "occasion": "Evening event or cocktail hour",
+        "description": "mandarin and lavender bridge femininity and edge — rule-breaking sensuality in a bottle",
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -193,7 +261,11 @@ def get_recommendations(img: Image.Image, context: dict | None = None) -> list:
             "house": frag["house"],
             "score": round(confidence, 2),
             "notes": frag["notes"],
-            "reasoning": f"Our vision model detected a {detected_vibes[0]} and {detected_vibes[1]} aesthetic. The notes of {frag['notes'][0]} perfectly complement this energy.",
+            "reasoning": (
+                f"For a {detected_vibes[1]} {detected_vibes[0]} look, "
+                f"{frag['name']} by {frag['house']} earns its place — "
+                f"{frag['description']}."
+            ),
             "occasion": frag["occasion"],
             "match_score": match_score,
         })
