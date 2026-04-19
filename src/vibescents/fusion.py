@@ -51,7 +51,9 @@ def fuse_scores(
     if set(normalized) != set(selected_weights):
         missing = sorted(set(normalized) - set(selected_weights))
         extra = sorted(set(selected_weights) - set(normalized))
-        raise ValueError(f"Weight keys must match score keys (missing={missing}, extra={extra}).")
+        raise ValueError(
+            f"Weight keys must match score keys (missing={missing}, extra={extra})."
+        )
     weight_total = sum(float(weight) for weight in selected_weights.values())
     if weight_total <= 0:
         raise ValueError("Weight sum must be positive.")
@@ -103,13 +105,17 @@ def grid_search_weights(
     scorer: Callable[[np.ndarray], float],
     weight_grid: Iterable[Mapping[str, float]],
 ) -> GridSearchResult:
-    normalized = normalize_signal_map(score_map)  # normalize once across all grid iterations
+    normalized = normalize_signal_map(
+        score_map
+    )  # normalize once across all grid iterations
     best: GridSearchResult | None = None
     for candidate_weights in weight_grid:
         fused = _fuse_normalized(normalized, candidate_weights)
         metric = float(scorer(fused))
         if best is None or metric > best.metric:
-            best = GridSearchResult(weights=dict(candidate_weights), metric=metric, scores=fused)
+            best = GridSearchResult(
+                weights=dict(candidate_weights), metric=metric, scores=fused
+            )
     if best is None:
         raise ValueError("weight_grid must not be empty.")
     return best

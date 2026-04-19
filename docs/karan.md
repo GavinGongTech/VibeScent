@@ -1,6 +1,6 @@
 # Karan — Fragrance Representation Lead
 
-Last updated: April 12, 2026
+Last updated: April 18, 2026
 
 ---
 
@@ -8,16 +8,51 @@ Last updated: April 12, 2026
 
 You own:
 
-- `display_text` generation — expressive, demo-optimized copy
+- `display_text` generation — expressive, demo-optimized copy for the UI
 - Structured fragrance attribute table (formality scores, season tags, occasion tags)
-- Note-family and accord mapping
+- Fragrance clustering and vibe space mapping
 - Validation that similar fragrances cluster together in embedding space
 
-You do **not** own `retrieval_text` generation. That pipeline was built by Harsh in `src/vibescents/enrich.py` because the original `embedding_text` (raw note concatenation) was insufficient for semantic retrieval. See alignment note below.
+You do **not** own `retrieval_text` generation. That pipeline was built by Harsh in `src/vibescents/enrich.py` because the original `embedding_text` (raw note concatenation) was insufficient for semantic retrieval.
 
 ---
 
-## Alignment Note (April 12)
+## What You Actually Built (April 17 — `b0d0267`)
+
+Karan built a **cluster-based vibe pipeline** — a separate, parallel approach to fragrance representation:
+
+```
+embed_fragrances.py     →  embeddings/fragrance_embeddings.npy   (35,889 × 384-dim)
+cluster_fragrances.py   →  data/processed/vibescent_clustered.csv  (adds vibe_cluster_id)
+                           models/kmeans_fragrance_model.pkl
+label_cluster_vibes.py  →  models/cluster_vibe_mapping.json        ← NOT YET COMMITTED
+test_vibe_pipeline.py   →  validation results
+```
+
+**What this does:** K-means clusters the full 35,889 fragrances by embedding similarity, then uses an LLM to label each cluster with a vibe descriptor. Every fragrance row now has a `vibe_cluster_id` column pointing to its cluster.
+
+**How this differs from Harsh's enrichment pipeline:**
+
+| | Karan's cluster approach | Harsh's per-fragrance enrichment |
+|---|---|---|
+| Granularity | Cluster-level — one label per group of ~100 fragrances | Per-fragrance — 11 individual attributes each |
+| Embedding dim | 384 (small SentenceTransformer model) | 1024 (Qwen3-Embedding-8B, #1 MTEB) |
+| LLM calls | One per cluster | One per fragrance |
+| Output | `vibe_cluster_id` integer per row | `formality`, `day_night`, `character_tags`, `vibe_sentence`, etc. |
+| Speed | Fast — cheap embeddings, few LLM calls | Slow — 2,000 LLM calls, large model |
+| Quality | Coarser — similar fragrances get the same label | Precise — each fragrance is individually characterized |
+
+**These are not interchangeable.** Karan's cluster IDs are useful as a coarse first-pass signal; Harsh's enrichment attributes are what the scoring and reranking use at inference time.
+
+---
+
+## Outstanding Gap
+
+`models/cluster_vibe_mapping.json` — the output of `label_cluster_vibes.py` — **has not been committed to the repo.** The K-means model exists, the clustered CSV exists, but the actual cluster vibe labels are missing. This needs to be pushed before the cluster signal can be used in the fusion formula.
+
+---
+
+## Alignment Note (April 12, still current)
 
 Karan's `embedding_text` field in `vibescent_unified.csv` was plain note concatenation:
 
@@ -25,68 +60,31 @@ Karan's `embedding_text` field in `vibescent_unified.csv` was plain note concate
 bergamot, lemon | jasmine, rose | sandalwood, vanilla
 ```
 
-This is ingredient-level text. It cannot bridge the semantic gap to occasion descriptions like "relaxed Sunday brunch with close friends" or "black tie evening wedding." Cosine similarity between these representations is near-random.
+This is ingredient-level text. It cannot bridge the semantic gap to occasion descriptions. Harsh built `enrich.py` to generate structured `retrieval_text`. The canonical retrieval string is now `retrieval_text` from `data/vibescent_enriched.csv`.
 
-Harsh extended scope to build `enrich.py`, which generates structured `retrieval_text` using `gemini-3-flash-preview`:
-
-```
-Brand: Dior | Name: Sauvage
-Accords: fresh, woody, aromatic
-Top: bergamot, pepper | Heart: lavender, geranium | Base: ambroxan, cedar
-Season: year-round, best in spring/fall | Best for: casual_day, creative_office
-Formality: medium | Character: fresh, clean, versatile, magnetic
-Vibe: An effortlessly cool and approachable scent with a bold aromatic backbone.
-```
-
-**Action required:** Karan and Harsh must align on which CSV is the canonical source of `retrieval_text` for Week 3 integration. The current canonical is `data/vibescent_enriched.csv` (produced by `enrich.py`). Karan's structured attribute table (formality_score, fresh_warm_score, day_night_score) should be verified against the enriched fields to avoid duplicates.
+Karan's structured attribute table (`formality_score`, `fresh_warm_score`, `day_night_score`) needs deduplication with the numeric fields already produced by `enrich.py` before Week 3 integration. Do not generate duplicate numeric columns with different names.
 
 ---
 
-## Week 2 Deliverables
+## Still Pending
 
-### Done
-
-None confirmed yet.
-
-### Pending
-
-- **`display_text` generation** — still Karan's full responsibility, not built yet. Must be more expressive than `retrieval_text` but still grounded in actual metadata. Not free-form blurbs.
-- **Structured attribute table** — `formality_score`, `fresh_warm_score`, `day_night_score` as 0.0–1.0 floats. Needs deduplication with the numeric fields already in `enrich.py` output.
-- **Clustering validation** — show that similar fragrances (e.g. aquatic fougères) cluster closer than dissimilar ones (e.g. heavy ouds vs citrus soliflores) using the enriched embeddings.
-
----
-
-## Text Strategy
-
-### `retrieval_text` (Harsh owns — do not regenerate without alignment)
-
-Rich, schema-controlled, optimized for embedding and ranking. Generated by `enrich.py`.
-
-### `display_text` (Karan owns)
-
-More expressive and stylistic. Optimized for the demo UI. Still grounded in actual metadata — not creative fiction. A user should be able to verify the claims from the fragrance's note/accord data.
-
-Example of the kind of tone to aim for:
-> A warm, sensual wood that lingers well past midnight. Built for candlelight and slow conversation — sandalwood depth softened by amber, with a whisper of iris that stops just short of sweet.
-
-Generation method: LLM-assisted templates using `gemini-3-flash-preview` (same API, same rate limit).
-
----
-
-## Week 3 Plan
-
-- Refine representation quality based on benchmark failures (e.g. if certain accord families retrieve poorly, improve their vibe sentences)
-- Support reranker inputs with cleaner structured fields — the reranker prompt needs well-structured metadata, not free-form notes
-- Coordinate with Harsh on final merged schema before integration
+- **`display_text` generation** — expressive, demo-optimized copy for the UI. Not built yet. Must be grounded in actual metadata — not creative fiction. Target tone:
+  > *A warm, sensual wood that lingers well past midnight. Built for candlelight and slow conversation — sandalwood depth softened by amber, with a whisper of iris that stops just short of sweet.*
+- **`models/cluster_vibe_mapping.json`** — commit the output of `label_cluster_vibes.py`
+- **Clustering validation chart** — show similar fragrances (e.g. aquatic fougères) cluster closer than dissimilar ones
 
 ---
 
 ## Required Outputs
 
-- `data/vibescent_display.csv` or a `display_text` column added to `vibescent_enriched.csv`
-- Structured attribute table (`formality_score`, `fresh_warm_score`, `day_night_score`)
-- Clustering validation chart or summary
-- Fragrance text generation script or notebook
+| Artifact | Status |
+|---|---|
+| `embeddings/fragrance_embeddings.npy` (35,889 × 384) | ✅ Done |
+| `data/processed/vibescent_clustered.csv` (with `vibe_cluster_id`) | ✅ Done |
+| `models/kmeans_fragrance_model.pkl` | ✅ Done |
+| `models/cluster_vibe_mapping.json` | ❌ Not committed |
+| `display_text` column in enriched CSV | ❌ Not built |
+| Clustering validation chart | ❌ Not built |
 
 ---
 
@@ -94,18 +92,8 @@ Generation method: LLM-assisted templates using `gemini-3-flash-preview` (same A
 
 **You depend on:**
 - Darren → canonical fragrance table (`vibescent_500.csv`) ✓
-- Harsh → text embedding pipeline ✓, enriched `retrieval_text` schema
+- Harsh → `retrieval_text` schema and enriched corpus ✓
 
 **Others depend on you:**
-- Neil → `retrieval_text` and structured attributes (pending)
-- Gavin → structured attributes for benchmark scoring
 - Harsh → `display_text` for the reranker output display
-
----
-
-## Success Criteria
-
-- `display_text` is expressive without being factually inaccurate
-- Structured attributes improve scoring stability in the fusion formula
-- Similar fragrances cluster together when embedded with `voyage-3-large`
-- The representation supports both high-quality retrieval and polished UI copy
+- Gavin → structured attributes for benchmark scoring

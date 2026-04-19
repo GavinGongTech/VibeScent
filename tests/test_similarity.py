@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from vibescents.similarity import cosine_similarity_matrix, normalize_rows, top_k_indices, weighted_sum
+from vibescents.similarity import (
+    cosine_similarity_matrix,
+    normalize_rows,
+    top_k_indices,
+    weighted_sum,
+)
 
 
 def test_normalize_rows_handles_zero_rows() -> None:

@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,10 +19,10 @@ from torch.utils.data import DataLoader
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from models.cnn_baseline import CNNBaseline
-from models.clip_standalone import CLIPStandalone
-from models.cnn_clip_hybrid import CNNCLIPHybrid
-from src.data_loader import load_fashionpedia_data
+from models.cnn_baseline import CNNBaseline  # noqa: E402
+from models.clip_standalone import CLIPStandalone  # noqa: E402
+from models.cnn_clip_hybrid import CNNCLIPHybrid  # noqa: E402
+from src.data_loader import load_fashionpedia_data  # noqa: E402
 
 PLOTS_DIR = ROOT / "outputs" / "plots"
 METRICS_PATH = ROOT / "outputs" / "metrics.json"
@@ -29,10 +30,10 @@ LOGS_DIR = ROOT / "logs"
 
 CLASS_DIMS = ["formal", "season", "gender", "time", "frequency"]
 CLASS_LABELS = {
-    "formal":    ["casual", "smart casual", "formal"],
-    "season":    ["spring", "summer", "fall", "winter"],
-    "gender":    ["male", "female", "neutral"],
-    "time":      ["day", "night"],
+    "formal": ["casual", "smart casual", "formal"],
+    "season": ["spring", "summer", "fall", "winter"],
+    "gender": ["male", "female", "neutral"],
+    "time": ["day", "night"],
     "frequency": ["occasional", "everyday"],
 }
 
@@ -40,6 +41,7 @@ CLASS_LABELS = {
 # ---------------------------------------------------------------------------
 # Device
 # ---------------------------------------------------------------------------
+
 
 def get_device() -> torch.device:
     if torch.backends.mps.is_available():
@@ -52,6 +54,7 @@ def get_device() -> torch.device:
 # ---------------------------------------------------------------------------
 # Model loading
 # ---------------------------------------------------------------------------
+
 
 def load_model(model_name: str, ckpt_path: Path, device: torch.device):
     if model_name == "cnn":
@@ -71,11 +74,12 @@ def load_model(model_name: str, ckpt_path: Path, device: torch.device):
 # Inference
 # ---------------------------------------------------------------------------
 
+
 @torch.no_grad()
 def run_inference(model, loader, device) -> dict:
     """Collect all predictions and ground truth labels."""
     preds = {k: [] for k in ["formal", "season", "gender", "time", "frequency"]}
-    gts   = {k: [] for k in ["formal", "season", "gender", "time", "frequency"]}
+    gts = {k: [] for k in ["formal", "season", "gender", "time", "frequency"]}
 
     for images, labels in loader:
         images = images.to(device)
@@ -92,6 +96,7 @@ def run_inference(model, loader, device) -> dict:
 # ---------------------------------------------------------------------------
 # Metrics
 # ---------------------------------------------------------------------------
+
 
 def compute_metrics(results: dict) -> dict:
     preds, gts = results["preds"], results["gts"]
@@ -111,6 +116,7 @@ def compute_metrics(results: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Plots
 # ---------------------------------------------------------------------------
+
 
 def plot_accuracy_bars(all_metrics: dict, model_names: list):
     """Bar chart: accuracy per classification attribute across models."""
@@ -140,7 +146,9 @@ def plot_confusion_matrices(results_by_model: dict):
         preds, gts = results["preds"], results["gts"]
         for dim in CLASS_DIMS:
             labels_list = CLASS_LABELS[dim]
-            cm = confusion_matrix(gts[dim], preds[dim], labels=list(range(len(labels_list))))
+            cm = confusion_matrix(
+                gts[dim], preds[dim], labels=list(range(len(labels_list)))
+            )
             fig, ax = plt.subplots(figsize=(5, 4))
             im = ax.imshow(cm, cmap="Blues")
             ax.set_xticks(range(len(labels_list)))
@@ -154,8 +162,15 @@ def plot_confusion_matrices(results_by_model: dict):
             # Annotate cells
             for r in range(cm.shape[0]):
                 for c in range(cm.shape[1]):
-                    ax.text(c, r, str(cm[r, c]), ha="center", va="center", fontsize=8,
-                            color="white" if cm[r, c] > cm.max() / 2 else "black")
+                    ax.text(
+                        c,
+                        r,
+                        str(cm[r, c]),
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                        color="white" if cm[r, c] > cm.max() / 2 else "black",
+                    )
             fig.tight_layout()
             fig.savefig(PLOTS_DIR / f"cm_{model_name}_{dim}.png", dpi=150)
             plt.close(fig)
@@ -174,11 +189,11 @@ def plot_loss_curves(model_names: list):
 
         epochs = range(1, len(history["train"]) + 1)
         train_total = [e["total_loss"] for e in history["train"]]
-        val_total   = [e["total_loss"] for e in history["val"]]
+        val_total = [e["total_loss"] for e in history["val"]]
 
         fig, ax = plt.subplots(figsize=(7, 4))
         ax.plot(epochs, train_total, label="train")
-        ax.plot(epochs, val_total,   label="val")
+        ax.plot(epochs, val_total, label="val")
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Total Loss")
         ax.set_title(f"{model_name} — Training Loss Curves")
@@ -192,9 +207,9 @@ def plot_loss_curves(model_names: list):
 # Terminal summary
 # ---------------------------------------------------------------------------
 
+
 def print_summary(all_metrics: dict):
     col_w = 14
-    header = f"{'Attribute':<14}" + "".join(f"{'Model':>{col_w}}" for _ in all_metrics)
     model_names = list(all_metrics.keys())
     print("\n" + "=" * (14 + col_w * len(model_names)))
     print(f"{'Attribute':<14}" + "".join(f"{m:>{col_w}}" for m in model_names))
@@ -214,12 +229,17 @@ def print_summary(all_metrics: dict):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate vibe models")
-    parser.add_argument("--models",           nargs="+", choices=["cnn", "clip", "hybrid"],
-                        default=["cnn", "clip", "hybrid"])
-    parser.add_argument("--data_dir",         type=str, default=".")
-    parser.add_argument("--checkpoints_dir",  type=str, default="checkpoints")
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        choices=["cnn", "clip", "hybrid"],
+        default=["cnn", "clip", "hybrid"],
+    )
+    parser.add_argument("--data_dir", type=str, default=".")
+    parser.add_argument("--checkpoints_dir", type=str, default="checkpoints")
     args = parser.parse_args()
 
     device = get_device()
