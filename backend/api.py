@@ -38,17 +38,18 @@ def search(req: SearchRequest) -> list[dict]:
         
         # 2. Sanitize the results so FastAPI and Next.js don't crash
         clean_results = []
-        for res in raw_results:
+        for i, res in enumerate(raw_results):
             if res is None:
                 # Provide a safe fallback dictionary if Google Shopping finds nothing
                 clean_results.append({
+                    "name": req.perfumes[i],
                     "price": "N/A",
                     "store": "Unavailable",
                     "purchaseUrl": "#",
-                    "thumbnail": "https://via.placeholder.com/150?text=Not+Found"
+                    "thumbnail": None,
                 })
             else:
-                clean_results.append(res)
+                clean_results.append({**res, "name": req.perfumes[i]})
 
         # ---------------------------------------------------------
         # 🖨️ PRINT 2: OUTGOING RESULTS

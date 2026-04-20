@@ -14,14 +14,14 @@ app = FastAPI()
 # ==========================================
 print("--- BOOTING ML PIPELINES ---")
 
-# 🚨 THE FIX: Actually call the function to wake up CLIP! 🚨
 initialize_model()
 
 print("Loading Text Embedding Model...")
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2') 
 
 print("Loading Fragrance Database...")
-fragrance_df = pd.read_csv('../data/mock_fragrances.csv') 
+fragrance_df = pd.read_csv('vibescent_enriched.csv')
+fragrance_df = fragrance_df.rename(columns={'name': 'Name', 'embedding_text': 'Notes'})
 
 # ==========================================
 # PYDANTIC SCHEMA
@@ -53,7 +53,6 @@ async def predict(request: RecommendRequest):
         print("="*50 + "\n")
 
         # STEP 2: Semantic Search
-        # 🚨 THE FIX: Changed from find_top_fragrances_semantic to recommend_fragrances 🚨
         results_df = recommend_fragrances(fragrance_df, user_event_input, embedding_model)
 
         if isinstance(results_df, str):
@@ -70,12 +69,20 @@ async def predict(request: RecommendRequest):
 
         # STEP 3: Format Output
         recommendations = []
-        for index, row in results_df.reset_index().iterrows():
+        for index, row in results_df.reset_index(drop=True).iterrows():
+
+            # 1. Replace pipes with commas, and remove the "Accords: " prefix
+            clean_string = row['Notes'].replace(" | ", ", ").replace("Accords: ", "")
+
             recommendations.append({
                 "rank": index + 1,
                 "name": row['Name'],
-                "score": float(row['Similarity_Score']), 
-                "notes": row['Notes'].split(" | "), 
+                "house": row['brand'],
+                "score": float(row['Similarity_Score']),
+
+                # 2. Now split the clean string into a perfect array of individual notes!
+                "notes": clean_string.split(", "),
+
                 "reasoning": f"{clip_reasoning} Paired with your specific notes, this is a {round(row['Similarity_Score']*100)}% aesthetic match.",
                 "occasion": f"The {user_event_input['Season']} Edit"
             })
