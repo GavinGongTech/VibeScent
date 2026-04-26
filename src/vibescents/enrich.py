@@ -114,14 +114,12 @@ class VLLMNativeEnrichmentClient:
                 temperature=0.0,
                 guided_decoding=GuidedDecodingParams(json=schema_json),
             )
-        except ImportError:
-            import json as _json
-
+        except (ImportError, TypeError):
+            # Modern vLLM versions may not support GuidedDecodingParams directly.
+            # Fall back to unrestricted generation (sampling only) and parse the output.
             self._sampling_params = SamplingParams(
                 max_tokens=self.max_tokens,
                 temperature=0.0,
-                guided_decoding_backend="xgrammar",  # ships with modern vLLM, no outlines needed
-                guided_json=_json.dumps(schema_json),
             )
 
         print(f"Loading {self.model_name} via vLLM native guided decoding…")
