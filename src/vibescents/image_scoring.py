@@ -326,7 +326,11 @@ class CLIPImageScorer:
     def score_image(self, image_bytes: bytes) -> ImageHeadProbabilities:
         import torch.nn.functional as F
 
-        img = __import__("PIL.Image", fromlist=["Image"]).Image.open(BytesIO(image_bytes)).convert("RGB")
+        img = (
+            __import__("PIL.Image", fromlist=["Image"])
+            .Image.open(BytesIO(image_bytes))
+            .convert("RGB")
+        )
         inputs = self._processor(images=img, return_tensors="pt").to(self._device)
         with self._torch.no_grad():
             img_emb = self._model.get_image_features(**inputs)
