@@ -14,7 +14,7 @@ class Settings:
     multimodal_embedding_model: str = "Qwen/Qwen3-VL-Embedding-8B"
     reranker_model: str = "Qwen/Qwen3-VL-Reranker-8B"
 
-    # LLM enrichment — any HuggingFace instruction-tuned model works with outlines
+    # LLM enrichment — any HuggingFace instruction-tuned model works with xgrammar guided decoding
     # Alternatives: "Qwen/Qwen3-14B", "google/gemma-3-12b-it", "google/gemma-3-27b-it"
     enrichment_model: str = "Qwen/Qwen3-8B"
 

@@ -99,6 +99,11 @@ class VLLMNativeEnrichmentClient:
 
     def __post_init__(self) -> None:
         from vllm import LLM, SamplingParams  # lazy import — vllm may not be installed
+        from transformers import AutoTokenizer
+
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            self.model_name, trust_remote_code=True
+        )
 
         schema_json = EnrichmentSchemaV2.model_json_schema()
         try:
@@ -110,21 +115,36 @@ class VLLMNativeEnrichmentClient:
                 guided_decoding=GuidedDecodingParams(json=schema_json),
             )
         except ImportError:
-            # older vllm API
             import json as _json
 
             self._sampling_params = SamplingParams(
                 max_tokens=self.max_tokens,
                 temperature=0.0,
-                guided_decoding_backend="outlines",
+                guided_decoding_backend="xgrammar",  # ships with modern vLLM, no outlines needed
                 guided_json=_json.dumps(schema_json),
             )
 
         print(f"Loading {self.model_name} via vLLM native guided decoding…")
-        self._llm = LLM(model=self.model_name, trust_remote_code=True)
+        _llm_kwargs = dict(
+            model=self.model_name,
+            trust_remote_code=True,
+            max_model_len=4096,       # enrichment prompts are short; 4096 >> what we need
+            gpu_memory_utilization=0.85,
+        )
+        try:
+            self._llm = LLM(**_llm_kwargs, enable_prefix_caching=True)
+        except TypeError:
+            # Older vLLM versions don't have enable_prefix_caching
+            self._llm = LLM(**_llm_kwargs)
 
     def generate(self, prompt: str) -> EnrichmentSchemaV2:
-        full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+        full_prompt = self._tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
         outputs = self._llm.generate([full_prompt], self._sampling_params)
         raw = outputs[0].outputs[0].text
         parsed = _parse_enrichment(raw)
@@ -139,7 +159,15 @@ class VLLMNativeEnrichmentClient:
         )
 
     def generate_batch(self, prompts: list[str]) -> list[EnrichmentSchemaV2 | None]:
-        full_prompts = [f"{SYSTEM_PROMPT}\n\n{prompt}" for prompt in prompts]
+        full_prompts = []
+        for p in prompts:
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": p},
+            ]
+            full_prompts.append(self._tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            ))
         outputs = self._llm.generate(full_prompts, self._sampling_params)
         results: list[EnrichmentSchemaV2 | None] = []
         for output in outputs:
