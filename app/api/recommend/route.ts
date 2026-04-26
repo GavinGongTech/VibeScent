@@ -1,102 +1,85 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { RecommendRequest, RecommendResponse } from "@/lib/types";
 
-const FALLBACK_RESPONSES: Record<string, RecommendResponse> = {
-  default: {
-    recommendations: [
-      {
-        rank: 1,
-        name: "Baccarat Rouge 540",
-        house: "Maison Francis Kurkdjian",
-        score: 0.91,
-        notes: ["jasmine", "saffron", "amberwood", "fir resin"],
-        reasoning:
-          "Fallback response: luminous amber profile matching formal evening styling.",
-        occasion: "Formal evening event",
-      },
-      {
-        rank: 2,
-        name: "Black Orchid",
-        house: "Tom Ford",
-        score: 0.84,
-        notes: ["black truffle", "ylang ylang", "dark chocolate", "patchouli"],
-        reasoning:
-          "Fallback response: darker floral profile for rich palettes and high contrast looks.",
-        occasion: "Cocktail or gala",
-      },
-      {
-        rank: 3,
-        name: "Portrait of a Lady",
-        house: "Frédéric Malle",
-        score: 0.76,
-        notes: ["turkish rose", "raspberry", "patchouli", "incense"],
-        reasoning:
-          "Fallback response: warm rose-forward option for evening dinner settings.",
-        occasion: "Evening dinner",
-      },
-    ],
-  },
-};
-
 const DEFAULT_BUDGET_USD = 500.0;
+const ML_BACKEND_URL = process.env.ML_BACKEND_URL ?? "http://127.0.0.1:8000";
+const SCRAPER_BACKEND_URL = process.env.SCRAPER_BACKEND_URL ?? "http://127.0.0.1:8001";
 
-function fallbackForRequest(_body: RecommendRequest): RecommendResponse {
-  return FALLBACK_RESPONSES.default;
+function contextToDescription(ctx: RecommendRequest["context"]): string {
+  return [ctx.eventType, ctx.timeOfDay, ctx.mood].filter(Boolean).join(", ");
 }
 
 export async function POST(req: NextRequest) {
   let body: RecommendRequest;
   try {
     body = (await req.json()) as RecommendRequest;
+    console.log(`\n--- New Recommendation Request ---`);
+    console.log(`Context:`, body.context);
+    console.log(`MimeType:`, body.mimeType);
 
-    // 1. Call the ML Model (Port 8000)
-    const mlResponse = await fetch("http://127.0.0.1:8000/predict", {
+    // Ensure the image string is pure base64 (strip data URI prefix if present)
+    const base64Image = body.image.replace(/^data:image\/\w+;base64,/, "");
+    console.log(`Base64 Image length:`, base64Image.length);
+
+    // 1. Call the ML Model
+    console.log(`Calling ML Backend at ${ML_BACKEND_URL}/recommend...`);
+    const mlResponse = await fetch(`${ML_BACKEND_URL}/recommend`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        image: base64Image,
+        mimeType: body.mimeType,
+        context: body.context,
+      }),
     });
 
-    if (!mlResponse.ok) throw new Error("ML backend failed");
+    if (!mlResponse.ok) {
+      const errorText = await mlResponse.text();
+      console.error(`ML Backend Error (${mlResponse.status}):`, errorText);
+      throw new Error(`ML backend returned ${mlResponse.status}: ${errorText}`);
+    }
+    
     const mlResult = (await mlResponse.json()) as RecommendResponse;
+    console.log(`ML Backend returned ${mlResult.recommendations?.length || 0} recommendations.`);
 
-    // Extract the names of the top 3 perfumes
+    // Extract the names of the top perfumes
     const perfumeNames = mlResult.recommendations.map(
       (frag) => `${frag.house} ${frag.name}`,
     );
 
-    // 2. Call the Scraper API (Port 8001)
-    // We pass a default budget of 500, but you could eventually add this to your UI!
-    const scraperResponse = await fetch("http://127.0.0.1:8001/search", {
+    // Get the requested budget or fallback to 150
+    const budgetCap = body.budget && body.budget > 0 ? body.budget : 150.0;
+
+    // 2. Call the Scraper API
+    console.log(`Calling Scraper API at ${SCRAPER_BACKEND_URL}/search with budget $${budgetCap}...`);
+    const scraperResponse = await fetch(`${SCRAPER_BACKEND_URL}/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         perfumes: perfumeNames,
-        budget: DEFAULT_BUDGET_USD,
+        budget: budgetCap,
       }),
     });
 
     if (!scraperResponse.ok) {
-      console.warn("Scraper failed, but returning ML results anyway.");
-      return NextResponse.json(mlResult); // Fail gracefully!
+      const scraperErrorText = await scraperResponse.text();
+      console.warn(`Scraper failed (${scraperResponse.status}): ${scraperErrorText}`);
+      console.warn("Returning ML results without pricing.");
+      return NextResponse.json(mlResult);
     }
 
     const scraperResult = await scraperResponse.json();
+    console.log(`Scraper returned data for ${scraperResult?.length || 0} items.`);
 
-    // 3. Merge the Scraper data into the ML data
-    // (This assumes your scraper returns an array or dictionary we can match by name)
+    // 3. Merge scraper pricing data into ML results
     const finalRecommendations = mlResult.recommendations.map((frag, index) => {
-      // Scraper result could be the dictionary, or null if nothing was found
       const scrapedData = scraperResult[index];
-
       return {
         ...frag,
-        // Format the float price to a beautiful string, fallback if null
         price:
           typeof scrapedData?.price === "number"
             ? `$${scrapedData.price.toFixed(2)}`
             : scrapedData?.price || "Price unavailable",
-
-        // Map the exact keys from your python dictionary
         purchaseUrl: scrapedData?.url || "#",
         store: scrapedData?.store || "Retailer unavailable",
         thumbnail: scrapedData?.thumbnail || null,
@@ -104,10 +87,13 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    // 4. Send the complete package to the frontend
+    console.log("Successfully returning merged recommendations.");
     return NextResponse.json({ recommendations: finalRecommendations });
   } catch (error) {
     console.error("API Route Error:", error);
-    return NextResponse.json(fallbackForRequest(body!));
+    return NextResponse.json(
+      { error: "Model backend unavailable or encountered an error. Please ensure the ML server is running and check the logs." },
+      { status: 503 },
+    );
   }
 }

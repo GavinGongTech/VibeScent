@@ -10,7 +10,7 @@ from vibescents.pipelines import (
     embed_text_frame,
     retrieve_with_multimodal_query,
 )
-from vibescents.reranker import GeminiReranker
+from vibescents.reranker import Qwen3VLReranker as GeminiReranker  # migrated
 from vibescents.schemas import RetrievalCandidate
 
 
@@ -117,7 +117,7 @@ def main() -> None:
             from vibescents.settings import Settings
 
             settings = Settings(
-                api_key=Settings.from_env().api_key, reranker_model=args.model
+                settings=Settings.from_env()
             )
         generator = BenchmarkGenerator(settings=settings)
         consolidated = []

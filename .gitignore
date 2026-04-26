@@ -46,3 +46,4 @@ train/
 # === Node / Frontend ===
 node_modules/
 .next/
+vibescent.zip

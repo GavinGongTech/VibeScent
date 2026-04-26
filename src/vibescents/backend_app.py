@@ -74,3 +74,22 @@ def set_recommendation_engine(app: FastAPI, engine: RecommendationEngine) -> Non
 
 
 app = create_app() if FastAPI is not None else None
+
+
+def create_configured_app(settings: Any = None) -> Any:
+    """Production entry point — injects VibeScoreEngine from disk artifacts.
+
+    Launch with:
+        uvicorn vibescents.backend_app:configured_app --host 0.0.0.0 --port 8000
+    """
+    from vibescents.engine import VibeScoreEngine
+    from vibescents.settings import Settings
+
+    s = settings or Settings.from_env()
+    engine = VibeScoreEngine.from_artifacts(settings=s)
+    return create_app(engine=engine)
+
+
+configured_app: Any = None  # populated at import time when VIBESCENT_AUTOSTART=1 is set
+if __import__("os").getenv("VIBESCENT_AUTOSTART") == "1" and FastAPI is not None:
+    configured_app = create_configured_app()

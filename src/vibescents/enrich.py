@@ -12,10 +12,10 @@ import pandas as pd
 from pydantic import ValidationError
 
 from vibescents.schemas import EnrichmentSchemaV2
-from vibescents.settings import Settings
-
-GEMINI_ENRICHMENT_MODEL = "gemini-3-flash-preview"
-QWEN_ENRICHMENT_MODEL = "Qwen/Qwen3.5-27B-GPTQ-Int4"
+# No API key needed — any HuggingFace instruct model works
+# Alternatives: "Qwen/Qwen3-14B", "google/gemma-3-12b-it", "google/gemma-3-27b-it"
+LOCAL_ENRICHMENT_MODEL = "Qwen/Qwen3-8B"
+QWEN_ENRICHMENT_MODEL = LOCAL_ENRICHMENT_MODEL  # backward-compat alias
 DEFAULT_BATCH_SIZE = 16
 DELAY_BETWEEN_BATCHES = 1.0
 
@@ -43,65 +43,18 @@ class EnrichmentClient(Protocol):
     def generate(self, prompt: str) -> EnrichmentSchemaV2:
         """Generate one enrichment object from a prompt."""
 
-
-@dataclass
-class GeminiEnrichmentClient:
-    model_name: str = GEMINI_ENRICHMENT_MODEL
-    settings: Settings | None = None
-
-    def __post_init__(self) -> None:
-        self.settings = self.settings or Settings.from_env()
-        if not self.settings.api_key:
-            raise ValueError("Set GEMINI_API_KEY or GOOGLE_API_KEY.")
-        from google import genai
-
-        self._client = genai.Client(api_key=self.settings.api_key)
-
-    def generate(self, prompt: str) -> EnrichmentSchemaV2:
-        from google.genai import types
-
-        last_error: Exception | None = None
-        for attempt in range(5):
-            try:
-                response = self._client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT,
-                        response_mime_type="application/json",
-                        response_schema=EnrichmentSchemaV2,
-                    ),
-                )
-                parsed = getattr(response, "parsed", None)
-                if isinstance(parsed, EnrichmentSchemaV2):
-                    return parsed
-                if parsed is not None:
-                    return EnrichmentSchemaV2.model_validate(parsed)
-                return EnrichmentSchemaV2.model_validate_json(response.text)
-            except Exception as exc:
-                last_error = exc
-                retryable = (
-                    "429" in str(exc)
-                    or "503" in str(exc)
-                    or "RESOURCE_EXHAUSTED" in str(exc)
-                )
-                if retryable and attempt < 4:
-                    delay = min(60.0, 2.0 ** (attempt + 1))
-                    time.sleep(delay)
-                    continue
-                raise
-        assert last_error is not None
-        raise last_error
-
+    def generate_batch(self, prompts: list[str]) -> list[EnrichmentSchemaV2 | None]:
+        """Generate a batch of enrichment objects."""
 
 @dataclass
 class QwenOutlinesEnrichmentClient:
     model_name: str = QWEN_ENRICHMENT_MODEL
 
     def __post_init__(self) -> None:
-        self._generator = _build_outlines_generator(self.model_name)
+        self._generator = _build_outlines_generator(self.model_name, EnrichmentSchemaV2)
 
     def generate(self, prompt: str) -> EnrichmentSchemaV2:
+        # outlines generators are callable with the prompt
         raw = self._generator(f"{SYSTEM_PROMPT}\n\n{prompt}")
         parsed = _parse_enrichment(raw)
         if parsed is not None:
@@ -112,19 +65,137 @@ class QwenOutlinesEnrichmentClient:
             return parsed
         raise ValueError("Outlines output could not be parsed into EnrichmentSchemaV2.")
 
+    def generate_batch(self, prompts: list[str]) -> list[EnrichmentSchemaV2 | None]:
+        full_prompts = [f"{SYSTEM_PROMPT}\n\n{prompt}" for prompt in prompts]
+        
+        # outlines generators support batching by passing a list of prompts
+        try:
+            raw_outputs = self._generator(full_prompts)
+        except Exception:
+            # Fallback for older versions or if batching fails
+            raw_outputs = [self._generator(p) for p in full_prompts]
+        
+        results = []
+        for raw in raw_outputs:
+            parsed = _parse_enrichment(raw)
+            if parsed is not None:
+                results.append(parsed)
+                continue
+            repaired = _repair_payload(raw)
+            parsed = _parse_enrichment(repaired)
+            if parsed is not None:
+                results.append(parsed)
+                continue
+            results.append(None)
+        return results
 
-def _build_outlines_generator(model_name: str):
+
+@dataclass
+class VLLMNativeEnrichmentClient:
+    model_name: str = QWEN_ENRICHMENT_MODEL
+    max_tokens: int = 512
+
+    def __post_init__(self) -> None:
+        from vllm import LLM, SamplingParams  # lazy import — vllm may not be installed
+
+        schema_json = EnrichmentSchemaV2.model_json_schema()
+        try:
+            from vllm.sampling_params import GuidedDecodingParams
+
+            self._sampling_params = SamplingParams(
+                max_tokens=self.max_tokens,
+                temperature=0.0,
+                guided_decoding=GuidedDecodingParams(json=schema_json),
+            )
+        except ImportError:
+            # older vllm API
+            import json as _json
+
+            self._sampling_params = SamplingParams(
+                max_tokens=self.max_tokens,
+                temperature=0.0,
+                guided_decoding_backend="outlines",
+                guided_json=_json.dumps(schema_json),
+            )
+
+        print(f"Loading {self.model_name} via vLLM native guided decoding…")
+        self._llm = LLM(model=self.model_name, trust_remote_code=True)
+
+    def generate(self, prompt: str) -> EnrichmentSchemaV2:
+        full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
+        outputs = self._llm.generate([full_prompt], self._sampling_params)
+        raw = outputs[0].outputs[0].text
+        parsed = _parse_enrichment(raw)
+        if parsed is not None:
+            return parsed
+        repaired = _repair_payload(raw)
+        parsed = _parse_enrichment(repaired)
+        if parsed is not None:
+            return parsed
+        raise ValueError("vLLM native output could not be parsed into EnrichmentSchemaV2.")
+
+    def generate_batch(self, prompts: list[str]) -> list[EnrichmentSchemaV2 | None]:
+        full_prompts = [f"{SYSTEM_PROMPT}\n\n{prompt}" for prompt in prompts]
+        outputs = self._llm.generate(full_prompts, self._sampling_params)
+        results: list[EnrichmentSchemaV2 | None] = []
+        for output in outputs:
+            raw = output.outputs[0].text
+            parsed = _parse_enrichment(raw)
+            if parsed is not None:
+                results.append(parsed)
+                continue
+            repaired = _repair_payload(raw)
+            parsed = _parse_enrichment(repaired)
+            if parsed is not None:
+                results.append(parsed)
+                continue
+            results.append(None)
+        return results
+
+
+def _build_outlines_generator(model_name: str, schema: Any):
     try:
         import outlines
     except ImportError as exc:
         raise ImportError(
-            "Qwen provider requires `outlines`. Install it in Colab with notebooks/requirements.colab.txt."
+            "Local LLM enrichment requires outlines: pip install outlines transformers accelerate"
         ) from exc
+        
     try:
-        model = outlines.models.vllm(model_name)
-    except Exception:
-        model = outlines.models.transformers(model_name, device="cuda")
-    return outlines.generate.json(model, EnrichmentSchemaV2)
+        import vllm
+        print(f"Attempting to load {model_name} via vLLM...")
+        llm = vllm.LLM(model=model_name, trust_remote_code=True)
+        # Outlines >= 1.0
+        if hasattr(outlines.models, "VLLMOffline"):
+            model = outlines.models.VLLMOffline(llm)
+        else:
+            model = outlines.models.vllm(model_name)
+    except Exception as e:
+        print(f"vLLM load failed: {e}. Falling back to transformers (slower).")
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        import torch
+        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        
+        # Use torch_dtype="auto" to ensure we use the model's native precision (bf16/fp16)
+        # instead of float32, which often causes VRAM overflow and CPU offloading.
+        hf_model = AutoModelForCausalLM.from_pretrained(
+            model_name, 
+            device_map="auto", 
+            torch_dtype="auto", 
+            trust_remote_code=True
+        )
+        
+        if hasattr(outlines.models, "Transformers"):
+            model = outlines.models.Transformers(hf_model, tokenizer)
+        else:
+            try:
+                # Some versions of outlines can take the hf_model directly
+                model = outlines.models.transformers(hf_model, tokenizer)
+            except Exception:
+                # Fallback to model name
+                model = outlines.models.transformers(model_name, device="cuda", trust_remote_code=True)
+            
+    return outlines.generate.json(model, schema)
 
 
 def _repair_payload(payload: Any) -> Any:
@@ -171,7 +242,7 @@ def _build_prompt(row: pd.Series) -> str:
 
 
 def _shrink_prompt(prompt: str, factor: float = 0.7) -> str:
-    clipped = prompt[: max(1, int(len(prompt) * factor))]
+    clipped = prompt[ : max(1, int(len(prompt) * factor))]
     return clipped if clipped.endswith("\n") else f"{clipped}\n"
 
 
@@ -199,25 +270,15 @@ def _append_failure_record(
         handle.write(json.dumps(record, ensure_ascii=True) + "\n")
 
 
-def _resolve_client(
-    *,
-    provider: str,
-    model_name: str | None,
-) -> EnrichmentClient:
-    if provider == "gemini":
-        return GeminiEnrichmentClient(model_name=model_name or GEMINI_ENRICHMENT_MODEL)
-    if provider == "qwen":
-        return QwenOutlinesEnrichmentClient(
-            model_name=model_name or QWEN_ENRICHMENT_MODEL
-        )
-    raise ValueError(f"Unsupported provider: {provider}")
+def _resolve_client(*, model_name: str | None) -> EnrichmentClient:
+    return QwenOutlinesEnrichmentClient(model_name=model_name or LOCAL_ENRICHMENT_MODEL)
 
 
 def enrich_dataframe(
     df: pd.DataFrame,
     *,
-    provider: str = "qwen",
     model_name: str | None = None,
+    provider: str = "local",  # kept for backward-compat, always uses local LLM
     max_rows: int | None = None,
     resume_from: int = 0,
     checkpoint_path: str | None = None,
@@ -225,7 +286,7 @@ def enrich_dataframe(
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> pd.DataFrame:
     """Enrich dataframe rows with EnrichmentSchemaV2 fields."""
-    client = _resolve_client(provider=provider, model_name=model_name)
+    client = _resolve_client(model_name=model_name)
 
     work = df.copy()
     for column in ENRICHMENT_COLUMNS:
@@ -243,26 +304,52 @@ def enrich_dataframe(
         batch_end = min(batch_start + batch_size, total)
         batch = subset.iloc[batch_start:batch_end]
 
-        for idx, row in batch.iterrows():
-            prompt = _build_prompt(row)
-            try:
-                record = client.generate(prompt)
-            except Exception as exc:
+        prompts = [_build_prompt(row) for _, row in batch.iterrows()]
+        indices = batch.index.tolist()
+        
+        try:
+            records = client.generate_batch(prompts)
+            for i, record in enumerate(records):
+                idx = indices[i]
+                if record is None:
+                    # Retry single row with shrunken prompt
+                    try:
+                        record = client.generate(_shrink_prompt(prompts[i]))
+                    except Exception as retry_exc:
+                        failed += 1
+                        _append_failure_record(
+                            failures_path,
+                            row_index=int(idx),
+                            prompt=prompts[i],
+                            error=f"Batch fail; retry={retry_exc}",
+                        )
+                        continue
+                
+                for column in ENRICHMENT_COLUMNS:
+                    work.at[idx, column] = _serialize_value(getattr(record, column))
+                processed += 1
+        except Exception as batch_exc:
+            print(f"Batch processing failed: {batch_exc}. Falling back to row-by-row.")
+            for idx, row in batch.iterrows():
+                prompt = _build_prompt(row)
                 try:
-                    record = client.generate(_shrink_prompt(prompt))
-                except Exception as retry_exc:
-                    failed += 1
-                    _append_failure_record(
-                        failures_path,
-                        row_index=int(idx),
-                        prompt=prompt,
-                        error=f"{exc}; retry={retry_exc}",
-                    )
-                    continue
+                    record = client.generate(prompt)
+                except Exception as exc:
+                    try:
+                        record = client.generate(_shrink_prompt(prompt))
+                    except Exception as retry_exc:
+                        failed += 1
+                        _append_failure_record(
+                            failures_path,
+                            row_index=int(idx),
+                            prompt=prompt,
+                            error=f"{exc}; retry={retry_exc}",
+                        )
+                        continue
 
-            for column in ENRICHMENT_COLUMNS:
-                work.at[idx, column] = _serialize_value(getattr(record, column))
-            processed += 1
+                for column in ENRICHMENT_COLUMNS:
+                    work.at[idx, column] = _serialize_value(getattr(record, column))
+                processed += 1
 
         done = min(batch_end, total)
         print(f"  [{done}/{total}] processed={processed} failed={failed}")
@@ -367,10 +454,8 @@ def main() -> None:
     parser.add_argument("--output-csv", required=True)
     parser.add_argument("--max-rows", type=int, default=None)
     parser.add_argument("--resume-from", type=int, default=0)
-    parser.add_argument("--provider", choices=["qwen", "gemini"], default="qwen")
-    parser.add_argument(
-        "--model", default=None, help="Override provider default model."
-    )
+    parser.add_argument("--model", default=LOCAL_ENRICHMENT_MODEL,
+        help="HF model: Qwen/Qwen3-8B, google/gemma-3-12b-it, etc.")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument(
         "--failures-log", default=None, help="Optional JSONL path for failed rows."
@@ -396,13 +481,11 @@ def main() -> None:
         print(f"Added fragrance_id column (0 to {len(df) - 1})")
 
     print(
-        "Enriching rows "
-        f"with provider={args.provider} model={args.model or 'default'} "
-        f"starting at index {args.resume_from}..."
+        f"Enriching rows starting at index {args.resume_from} "
+        f"with model={args.model}..."
     )
     enriched = enrich_dataframe(
         df,
-        provider=args.provider,
         model_name=args.model,
         max_rows=args.max_rows,
         resume_from=args.resume_from,

@@ -41,8 +41,12 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${cormorant.variable} ${dmSans.variable} ${dmMono.variable}`}
+      suppressHydrationWarning
     >
-      <body className="min-h-screen flex flex-col selection:bg-gold-dim selection:text-ink">
+      <body
+        className="min-h-screen flex flex-col selection:bg-gold-dim selection:text-ink"
+        suppressHydrationWarning
+      >
         <Navbar />
         <main className="grow">{children}</main>
 

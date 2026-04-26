@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from vibescents.embeddings import GeminiEmbedder, Qwen3VLMultimodalEmbedder
+from vibescents.embeddings import Qwen3VLMultimodalEmbedder
 from vibescents.io_utils import dump_json, ensure_dir, save_dataframe, save_embeddings
 from vibescents.schemas import RetrievalCandidate
 from vibescents.similarity import (
@@ -24,10 +24,10 @@ def embed_text_frame(
     model: str | None = None,
     input_type: str = "document",
 ) -> np.ndarray:
-    embedder = GeminiEmbedder()
+    embedder = Qwen3VLMultimodalEmbedder()
     output_path = ensure_dir(Path(output_dir))
     texts = frame[text_column].fillna("").astype(str).tolist()
-    embeddings = embedder.embed_texts(texts, model=model, input_type=input_type)
+    embeddings = embedder.embed_multimodal_documents(texts)
     metadata = frame[[id_column, text_column]].copy()
     save_embeddings(output_path / "embeddings.npy", embeddings)
     save_dataframe(output_path / "metadata.csv", metadata)
@@ -40,10 +40,10 @@ def embed_occasions(
     output_dir: str | Path,
 ) -> np.ndarray:
     output_path = ensure_dir(Path(output_dir))
-    embedder = GeminiEmbedder()
+    embedder = Qwen3VLMultimodalEmbedder()
     texts = [item["text"] for item in occasions]
     ids = [item["occasion_id"] for item in occasions]
-    embeddings = embedder.embed_texts(texts, input_type="query")
+    embeddings = embedder.embed_multimodal_documents(texts)
     similarity = cosine_similarity_matrix(embeddings)
 
     metadata = pd.DataFrame({"occasion_id": ids, "text": texts})

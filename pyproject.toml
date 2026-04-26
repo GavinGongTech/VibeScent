@@ -14,7 +14,8 @@ dependencies = [
   "pillow",
   "pydantic>=2",
   "uvicorn>=0.44.0",
-  "voyageai",
+  "requests>=2.32.0",
+  "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +23,7 @@ dev = [
   "pytest",
   "pytest-cov",
   "ruff",
+  "httpx",
 ]
 gpu = [
   "torch>=2.0.0",

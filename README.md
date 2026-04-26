@@ -1,148 +1,205 @@
 # VibeScent
 
-A multimodal fragrance recommendation system that matches outfit images to fragrances using text retrieval, image classification, and score fusion.
+A multimodal fragrance recommendation system that matches outfit images to luxury fragrances using text retrieval, zero-shot image classification, and score fusion.
 
 ## Architecture
 
 ```
-Outfit Image ─┬─► Image Classifier (CNN/CLIP) ─► vibe labels + 512-d embedding
+Outfit Image ─┬─► SigLIP2 zero-shot classifier ─► formality / season / time attributes
                │
-               └─► Text Pipeline (Gemini/Voyage) ─► fragrance retrieval + reranking
+               ├─► Qwen3-VL-Embedding-8B (multimodal) ─► joint image+text embedding
+               │
+               └─► Context (event, mood, time) ─┬─► Qwen3-VL-Embedding-8B (text)
+                                                  └─► Structured attribute scoring
                                                           │
-               Context (event, mood, time) ───────────────┘
+                                               Score Fusion (weighted sum)
                                                           │
-                                                    Score Fusion ─► Top-K Fragrances
+                                                    Top-3 Fragrances
                                                           │
-                                                    FastAPI Backend ◄── Next.js Frontend
+                              FastAPI ML backend (port 8000) ◄── Next.js frontend (port 3000)
+                                                          │
+                              FastAPI Scraper API (port 8001) ─► Pricing + purchase links
 ```
 
 ## Components
 
 | Directory | Owner | Description |
 |-----------|-------|-------------|
-| `src/vibescents/` | Harsh | Core Python package — backend API, embeddings, fusion, image scoring, reranking |
-| `models/`, `experiments/`, `src/inference.py` | Neil | CNN/CLIP outfit classifiers (3 architectures) |
-| `embed_fragrances.py`, `merge_datasets.py`, `scent_clusters.py` | Karan | Fragrance data unification, embedding, clustering |
-| `app/`, `components/`, `lib/` | Darren | Next.js frontend with luxury editorial UI |
-| `notebooks/` | Harsh | Colab pipelines for Weeks 2-4 |
-| `docs/` | All | Project planning and member documentation |
+| `src/vibescents/` | Harsh | Core Python package — backend API, engine, embeddings, fusion, image scoring |
+| `app/`, `components/`, `lib/` | Darren | Next.js 14 frontend — luxury editorial UI |
+| `notebooks/` | Harsh | Colab/Kaggle pipelines for offline preprocessing |
+| `docs/` | All | Project planning and architecture documentation |
+| `tests/` | Harsh | pytest suite (16 test files) |
+| `data/` | All | Fragrance datasets and enriched CSV |
+| `artifacts/` | Harsh | Pre-computed embeddings and pipeline outputs |
 
 ## Quick Start
 
-### Backend (Python)
+### Prerequisites
+
+- Python 3.11+ (managed via `uv`)
+- Bun (frontend package manager)
+- GPU recommended — 16 GB VRAM for Qwen3-VL text/multimodal channels; CPU fallback runs SigLIP2 + structured channels only
+
+### Setup
 
 ```bash
+# Python dependencies
 uv sync --extra dev
-```
 
-Set environment variables:
-```bash
-GEMINI_API_KEY=...      # Required for text pipeline
-GOOGLE_API_KEY=...      # Alternative to GEMINI_API_KEY
-VOYAGE_API_KEY=...      # Optional
-HF_TOKEN=...            # Optional (Hugging Face)
-NGROK_AUTH_TOKEN=...    # Optional (tunnel for demo)
-```
-
-For Colab notebooks (GPU runtime):
-```bash
-pip install -r notebooks/requirements.colab.txt
-```
-
-Run the API server:
-```bash
-uv run python -m vibescents.backend_app
-```
-
-### Frontend (Next.js)
-
-```bash
-cd frontend/
+# Frontend dependencies
 bun install
-bun run dev
 ```
 
-### Image Processing
+Create a `.env` file in the project root:
 
 ```bash
-pip install -r requirements.txt
+# Optional — enables live pricing and purchase links on result cards
+SERPAPI_KEY=<your_serpapi_key>
 
-# Generate pseudo-labels via CLIP zero-shot
-python src/clip_zero_shot.py
-
-# Train a model
-python experiments/cnn_baseline/train.py --epochs 15 --batch_size 64
-
-# Run inference
-python src/inference.py --model hybrid --checkpoint checkpoints/hybrid/best.pt --input path/to/outfit.jpg
+# Optional — faster HuggingFace model downloads
+HF_TOKEN=<your_hf_token>
 ```
 
-### Fragrance Pipeline
+### Generate corpus embeddings (one-time, GPU required)
+
+Before first run, the Qwen3-VL corpus embeddings must be generated:
+
+1. Open `notebooks/harsh_offline_pipeline.ipynb` in Colab or Kaggle (A100 recommended)
+2. Run all cells — this embeds ~36K enriched fragrances with Qwen3-VL-Embedding-8B
+3. Download `artifacts/qwen3vl_corpus/embeddings.npy` and the paired `metadata.csv` into the project
+
+The engine will not start without these files. The offline pipeline also generates the enriched metadata (`data/vibescent_enriched.csv`) if it doesn't exist.
+
+### Run everything
 
 ```bash
-python merge_datasets.py        # Unify 5 data sources
-python embed_fragrances.py      # Generate embeddings (requires GPU)
-python scent_clusters.py        # K-Means clustering
+./start.sh
 ```
+
+This starts all three services in order and waits for each to be healthy:
+- ML backend → `http://localhost:8000`
+- Scraper API → `http://localhost:8001`
+- Next.js frontend → `http://localhost:3000`
+
+Open `http://localhost:3000/demo` to use the app.
+
+To run services individually:
+
+```bash
+uv run uvicorn "vibescents.backend_app:create_configured_app" --factory --host 0.0.0.0 --port 8000
+uv run uvicorn vibescents.scraper_app:app --host 0.0.0.0 --port 8001
+bun run dev:web
+```
+
+## Inference Pipeline
+
+### Online (per request, ~1–4 seconds)
+
+| Channel | Weight | Model | Coverage |
+|---|---|---|---|
+| Text | 0.30 | Qwen3-VL-Embedding-8B | Full corpus (36K) |
+| Multimodal | 0.25 | Qwen3-VL-Embedding-8B | Tier B only (2K enriched) |
+| Image | 0.30 | SigLIP2 (google/siglip2-base-patch16-224) | Tier B only |
+| Structured | 0.15 | Arithmetic (no model) | Tier B only |
+
+Each channel produces a per-fragrance score array. All four are min-max normalized to [0, 1] independently, then combined via weighted sum. Missing channels (e.g. no GPU for Qwen3-VL) are redistributed with pre-tuned fallback weight sets.
+
+### Offline (one-time, GPU required)
+
+- **Enrichment**: LLM (Qwen3.5-8B or Gemini flash fallback) generates `formality`, `day_night`, `fresh_warm`, `vibe_sentence`, and other fields for each fragrance
+- **Corpus embedding**: Qwen3-VL-Embedding-8B embeds all enriched `retrieval_text` strings → `artifacts/qwen3vl_corpus/embeddings.npy`
 
 ## Project Layout
 
 ```text
-src/vibescents/           # Core Python package
-  backend_app.py          # FastAPI server
-  cli.py                  # CLI entry point
-  embeddings.py           # Text/multimodal embedding generation
-  fusion.py               # 4-signal score fusion
-  image_scoring.py        # CNN probability-to-fragrance matching
-  image_preprocess.py     # Base64 -> tensor preprocessing
-  reranker.py             # Cross-encoder reranking
-  schemas.py              # Pydantic models
-  settings.py             # Configuration
+src/vibescents/
+  backend_app.py          # FastAPI server (port 8000) — /healthz, /recommend
+  engine.py               # VibeScoreEngine — 4-channel fusion, lazy model loading
+  embeddings.py           # Qwen3VLMultimodalEmbedder
+  fusion.py               # min_max_normalize + weighted fuse_scores
+  image_scorer.py         # SigLIP2ImageScorer — zero-shot outfit classification
+  image_scoring.py        # ImageHeadProbabilities dataclass
+  structured_scorer.py    # compute_structured_scores — context → attribute → distance
+  query.py                # context_to_query_string — expands event/mood/time to rich phrases
+  reranker.py             # Cross-encoder reranker (research, not in production path)
+  scraper_app.py          # FastAPI server (port 8001) — /search
+  perfume_scraper.py      # SerpAPI Google Shopping scraper
+  schemas.py              # Pydantic models: RecommendRequest, FragranceRecommendation, etc.
+  settings.py             # Configuration (artifact paths, model names)
+  enrich.py               # LLM enrichment pipeline
+  pipelines.py            # Offline pipeline orchestration
 
-models/                   # Image classification models (Neil)
-  cnn_baseline.py
-  clip_standalone.py
-  cnn_clip_hybrid.py
+app/
+  page.tsx                # Landing page (/)
+  demo/page.tsx           # Demo page (/demo) — two-column: inputs + results
+  model/page.tsx          # How It Works (/model) — pipeline + methodology
+  api/recommend/route.ts  # POST /api/recommend — orchestrates ML backend + scraper
 
-experiments/              # Training/eval scripts per model
-app/                      # Next.js frontend (Darren)
-notebooks/                # Colab pipelines
-tests/                    # pytest suite
-docs/                     # Project docs
-data/                     # Fragrance datasets
-```
+components/
+  demo/                   # OutfitUploader, ContextForm, SubmitButton, ResultsPanel, FragranceCard
+  landing/                # Hero, AboutSection
+  model/                  # PipelineVisual, DataVisual
+  layout/                 # Navbar, Footer
+  ui/                     # Button, Tag, GoldDivider
 
-## CLI Workflows
+lib/
+  types.ts                # Shared TypeScript types (RecommendRequest, FragranceRecommendation, ContextInput)
+  recommend.ts            # Client-side /api/recommend fetch wrapper
 
-```bash
-# Embed occasion descriptions
-uv run vibescents embed-occasions --input-json examples/occasions.json --output-dir artifacts/occasions
+notebooks/
+  harsh_offline_pipeline.ipynb   # Main preprocessing pipeline — enrichment + embedding (GPU)
+  harsh_week5_qwen3vl.ipynb      # Week 5 Qwen3-VL multimodal embedding experiments
 
-# Embed fragrance corpus
-uv run vibescents embed-csv --input-csv data/fragrances.csv --id-column fragrance_id --text-column retrieval_text --output-dir artifacts/fragrance_text
-
-# Multimodal retrieval
-uv run vibescents multimodal-retrieve --fragrance-csv data/fragrances.csv --occasion-text "Black tie evening wedding" --image-path assets/tuxedo.jpg --output-dir artifacts/multimodal_query
-
-# Rerank candidates
-uv run vibescents rerank --candidate-json artifacts/multimodal_query/top_candidates.json --occasion-text "Black tie evening wedding" --output-json artifacts/reranked_candidates.json
+tests/                    # pytest suite — 16 test files
+data/                     # vibescent_enriched.csv — 36K fragrances with all enrichment fields
+artifacts/
+  qwen3vl_corpus/         # embeddings.npy + metadata.csv (generated by offline pipeline)
+  occasions/              # Week 2 occasion embeddings and similarity heatmap
 ```
 
 ## Fusion Formula
 
 ```
-final_score = 0.30 * text_score + 0.25 * multimodal_score + 0.30 * image_score + 0.15 * structured_score
+fused = 0.30 × norm(text_scores)
+      + 0.25 × norm(multimodal_scores)
+      + 0.30 × norm(image_scores)
+      + 0.15 × norm(structured_scores)
 ```
 
-## API Endpoints
+`norm()` is min-max normalization over the full candidate array. When a channel is unavailable, the engine falls back to pre-tuned weight sets that re-normalize the remaining channels to sum to 1.0.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/healthz` | Liveness probe |
-| POST | `/recommend` | Accept outfit image (base64) + context, return ranked fragrances |
+## API Reference
+
+### ML Backend (`localhost:8000`)
+
+| Method | Path | Body | Description |
+|--------|------|------|-------------|
+| GET | `/healthz` | — | Liveness probe |
+| POST | `/recommend` | `RecommendRequest` | Outfit image + context → ranked fragrances |
+
+### Scraper API (`localhost:8001`)
+
+| Method | Path | Body | Description |
+|--------|------|------|-------------|
+| POST | `/search` | `{perfumes: string[], budget: float}` | Perfume names + budget → pricing + links |
 
 ## Testing
 
 ```bash
 uv run python -m pytest tests/ -v
 ```
+
+If the venv has a Python version conflict:
+
+```bash
+mv .venv .venv_old
+UV_PROJECT_ENVIRONMENT=.venv_new uv sync --extra dev
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `SERPAPI_KEY` | No | Google Shopping scraper for live pricing. Without it, price shows as "Price Unavailable" |
+| `HF_TOKEN` | No | Faster downloads of Qwen3-VL models from HuggingFace Hub |

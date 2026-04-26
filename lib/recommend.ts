@@ -12,7 +12,8 @@ export async function getRecommendations(
   });
 
   if (!response.ok) {
-    throw new Error("Failed to curate fragrance. Please try again.");
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? "Failed to curate fragrance. Please try again.");
   }
 
   return response.json();

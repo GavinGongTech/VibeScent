@@ -7,12 +7,13 @@ import ContextForm from "@/components/demo/ContextForm";
 import SubmitButton from "@/components/demo/SubmitButton";
 import ResultsPanel from "@/components/demo/ResultsPanel";
 import { getRecommendations } from "@/lib/recommend";
-import { FragranceRecommendation } from "@/lib/types";
+import { ContextInput, FragranceRecommendation } from "@/lib/types";
 
 export default function DemoPage() {
   const [image, setImage] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
-  const [context, setContext] = useState("");
+  const [context, setContext] = useState<ContextInput>({});
+  const [budget, setBudget] = useState<number>(150);
   const [results, setResults] = useState<FragranceRecommendation[] | null>(
     null,
   );
@@ -39,6 +40,7 @@ export default function DemoPage() {
         image,
         mimeType,
         context,
+        budget,
       });
       setResults(response.recommendations);
     } catch (err) {
@@ -77,7 +79,12 @@ export default function DemoPage() {
 
           <div className="h-px w-full bg-border" />
 
-          <ContextForm value={context} onChange={setContext} />
+          <ContextForm
+            value={context}
+            onChange={setContext}
+            budget={budget}
+            onBudgetChange={setBudget}
+          />
 
           <div className="pt-4">
             {error && (
