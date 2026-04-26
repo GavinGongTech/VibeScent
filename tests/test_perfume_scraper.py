@@ -30,11 +30,11 @@ def test_store_priority_unknown_returns_max() -> None:
 
 
 def test_parse_price_simple() -> None:
-    assert _parse_price("9.99") == pytest.approx(89.99)
+    assert _parse_price("$89.99") == pytest.approx(89.99)
 
 
 def test_parse_price_with_commas() -> None:
-    assert _parse_price(",299.00") == pytest.approx(1299.0)
+    assert _parse_price("$1,299.00") == pytest.approx(1299.0)
 
 
 def test_parse_price_no_dollar_sign() -> None:
@@ -63,14 +63,14 @@ def test_search_perfume_filters_over_budget() -> None:
     resp.json.return_value = {
         "shopping_results": [
             {
-                "price": "0.00",
+                "price": "$50.00",
                 "source": "Sephora",
                 "title": "A",
                 "product_link": "http://a",
                 "thumbnail": "",
             },
             {
-                "price": "00.00",
+                "price": "$150.00",
                 "source": "Nordstrom",
                 "title": "B",
                 "product_link": "http://b",
