@@ -68,6 +68,8 @@ class BenchmarkGenerationResponse(BaseModel):
 
 
 SeasonLabel = Literal["spring", "summer", "fall", "winter", "all-season"]
+GenderLabel = Literal["male", "female", "neutral"]
+FrequencyLabel = Literal["occasional", "everyday"]
 
 
 class EnrichmentSchemaV2(BaseModel):
@@ -76,6 +78,8 @@ class EnrichmentSchemaV2(BaseModel):
     formality: float = Field(ge=0.0, le=1.0)
     fresh_warm: float = Field(ge=0.0, le=1.0)
     day_night: float = Field(ge=0.0, le=1.0)
+    gender: GenderLabel = "neutral"
+    frequency: FrequencyLabel = "everyday"
     character_tags: list[str] = Field(default_factory=list, min_length=3, max_length=5)
     vibe_sentence: str
     longevity: str

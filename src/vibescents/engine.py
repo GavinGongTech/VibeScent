@@ -8,7 +8,12 @@ import pandas as pd
 
 from vibescents.embeddings import Qwen3VLMultimodalEmbedder
 from vibescents.fusion import fuse_scores
-from vibescents.image_scoring import CLIPImageScorer, ImageHeadProbabilities
+from vibescents.image_scoring import (
+    CLIPImageScorer,
+    GENDER_INDEX,
+    FREQUENCY_INDEX,
+    ImageHeadProbabilities,
+)
 from vibescents.io_utils import load_embeddings
 from vibescents.query import context_to_query_string
 from vibescents.schemas import (
@@ -186,8 +191,10 @@ class VibeScoreEngine:
         formality = pd.to_numeric(df["formality"], errors="coerce").fillna(0.5).values
         day_night = pd.to_numeric(df["day_night"], errors="coerce").fillna(0.5).values
         seasons = df["likely_season"].fillna("all-season").astype(str).values
+        genders = df["gender"].fillna("neutral").astype(str).values if "gender" in df.columns else None
+        frequencies = df["frequency"].fillna("everyday").astype(str).values if "frequency" in df.columns else None
 
-        # Map each fragrance's continuous attributes → discrete class indices
+        # Map each fragrance's attributes → discrete class indices
         formal_targets = np.where(formality < 0.33, 0, np.where(formality < 0.67, 1, 2))
         time_targets = (day_night >= 0.5).astype(int)
 
@@ -202,12 +209,42 @@ class VibeScoreEngine:
             dtype=int,
         )
 
+        # Gender: default to neutral (2) when column is absent or unparseable
+        _default_gender = GENDER_INDEX["neutral"]
+        gender_targets = (
+            np.array(
+                [GENDER_INDEX.get(g.strip().lower(), _default_gender) for g in genders],
+                dtype=int,
+            )
+            if genders is not None
+            else np.full(len(df), _default_gender, dtype=int)
+        )
+
+        # Frequency: default to everyday (1) when column is absent or unparseable
+        _default_freq = FREQUENCY_INDEX["everyday"]
+        frequency_targets = (
+            np.array(
+                [FREQUENCY_INDEX.get(f.strip().lower(), _default_freq) for f in frequencies],
+                dtype=int,
+            )
+            if frequencies is not None
+            else np.full(len(df), _default_freq, dtype=int)
+        )
+
         # Look up the CLIP probability assigned to each fragrance's target class
         formal_p = np.clip(probs.formal[formal_targets], eps, 1.0)
         time_p = np.clip(probs.time[time_targets], eps, 1.0)
         season_p = np.clip(probs.season[season_targets], eps, 1.0)
+        gender_p = np.clip(probs.gender[gender_targets], eps, 1.0)
+        frequency_p = np.clip(probs.frequency[frequency_targets], eps, 1.0)
 
-        nll = -(np.log(formal_p) + np.log(season_p) + np.log(time_p))
+        nll = -(
+            np.log(formal_p)
+            + np.log(season_p)
+            + np.log(time_p)
+            + np.log(gender_p)
+            + np.log(frequency_p)
+        )
         return np.exp(-nll).astype(np.float32)
 
     def _fuse(

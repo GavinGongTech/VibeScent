@@ -19,21 +19,36 @@ SEASON_INDEX = {
     "winter": 3,
 }
 
+GENDER_INDEX = {
+    "male": 0,
+    "female": 1,
+    "neutral": 2,
+}
+
+FREQUENCY_INDEX = {
+    "occasional": 0,
+    "everyday": 1,
+}
+
 DEFAULT_HEAD_WEIGHTS = {
     "formal": 1.0,
     "season": 1.0,
     "time": 1.0,
+    "gender": 1.0,
+    "frequency": 1.0,
 }
 
 _EPSILON = 1e-8
-_HEAD_NAMES = ("formal", "season", "time")
+_HEAD_NAMES = ("formal", "season", "time", "gender", "frequency")
 
 
 @dataclass(frozen=True)
 class ImageHeadProbabilities:
-    formal: np.ndarray
-    season: np.ndarray
-    time: np.ndarray
+    formal: np.ndarray    # [casual, smart-casual, formal]
+    season: np.ndarray    # [spring, summer, fall, winter]
+    time: np.ndarray      # [day, night]
+    gender: np.ndarray    # [male, female, neutral]
+    frequency: np.ndarray  # [occasional, everyday]
 
     def as_dict(self) -> dict[str, np.ndarray]:
         return {name: getattr(self, name) for name in _HEAD_NAMES}
@@ -49,6 +64,16 @@ def discretize_formality(formality: float) -> int:
 
 def discretize_day_night(day_night: float) -> int:
     return 1 if day_night >= 0.5 else 0
+
+
+def discretize_gender(gender: str | None) -> int:
+    return GENDER_INDEX.get((gender or "neutral").strip().lower(), GENDER_INDEX["neutral"])
+
+
+def discretize_frequency(frequency: str | None) -> int:
+    return FREQUENCY_INDEX.get(
+        (frequency or "everyday").strip().lower(), FREQUENCY_INDEX["everyday"]
+    )
 
 
 def season_target_index(likely_season: str | None, season_probs: np.ndarray) -> int:
@@ -84,6 +109,8 @@ def image_negative_log_likelihood(
     formal_target = discretize_formality(formality)
     time_target = discretize_day_night(day_night)
     season_target = season_target_index(likely_season, head_probabilities["season"])
+    gender_target = discretize_gender(str(fragrance.get("gender", "neutral")))
+    frequency_target = discretize_frequency(str(fragrance.get("frequency", "everyday")))
 
     nll = (
         weights["formal"]
@@ -92,6 +119,10 @@ def image_negative_log_likelihood(
         * np.log(_safe_probability(head_probabilities["season"], season_target))
         + weights["time"]
         * np.log(_safe_probability(head_probabilities["time"], time_target))
+        + weights["gender"]
+        * np.log(_safe_probability(head_probabilities["gender"], gender_target))
+        + weights["frequency"]
+        * np.log(_safe_probability(head_probabilities["frequency"], frequency_target))
     )
     return float(-nll)
 
@@ -173,16 +204,18 @@ class NeilCNNWrapper:
             formal=_softmax_numpy(outputs["formal"]),
             season=_softmax_numpy(outputs["season"]),
             time=_softmax_numpy(outputs["time"]),
+            gender=_softmax_numpy(outputs["gender"]),
+            frequency=_softmax_numpy(outputs["frequency"]),
         )
 
 
 def _coerce_head_outputs(raw: Any) -> dict[str, np.ndarray]:
     if isinstance(raw, Mapping):
         return {name: _to_numpy(raw[name]) for name in _HEAD_NAMES}
-    if isinstance(raw, (tuple, list)) and len(raw) >= 3:
-        return {name: _to_numpy(val) for name, val in zip(_HEAD_NAMES, raw[:3])}
+    if isinstance(raw, (tuple, list)) and len(raw) >= 5:
+        return {name: _to_numpy(val) for name, val in zip(_HEAD_NAMES, raw[:5])}
     raise ValueError(
-        "Unsupported CNN output format. Expected mapping or tuple/list with 3 heads."
+        "Unsupported CNN output format. Expected mapping or tuple/list with 5 heads."
     )
 
 
@@ -238,9 +271,10 @@ def _coerce_str(value: Any, name: str) -> str:
 
 _CLIP_MODEL = "openai/clip-vit-large-patch14"
 
-# Neil's prompt bank from vibes.json — 3 prompts per class, ordered to match
-# ImageHeadProbabilities indices: formal[0]=casual/[1]=smart-casual/[2]=formal;
-# season[0]=spring/[1]=summer/[2]=fall/[3]=winter; time[0]=day/[1]=night.
+# Prompt bank — 3 prompts per class, ordered to match ImageHeadProbabilities indices:
+# formal[0]=casual/[1]=smart-casual/[2]=formal; season[0]=spring/.../[3]=winter;
+# time[0]=day/[1]=night; gender[0]=male/[1]=female/[2]=neutral;
+# frequency[0]=occasional/[1]=everyday.
 _CLIP_FORMAL_PROMPTS: list[list[str]] = [
     [
         "a person in ripped jeans and a graphic tee with sneakers",
@@ -292,6 +326,35 @@ _CLIP_TIME_PROMPTS: list[list[str]] = [
         "an outfit styled for after-dark occasions with bold or sleek aesthetics",
     ],
 ]
+_CLIP_GENDER_PROMPTS: list[list[str]] = [
+    [  # male
+        "a man in a masculine outfit with tailored trousers and dress shoes",
+        "a male presenting person in a structured jacket and button-down shirt",
+        "menswear including suits, oxfords, or classic masculine attire",
+    ],
+    [  # female
+        "a woman in a feminine outfit with a dress or skirt and heels",
+        "a female presenting person in stylish women's fashion",
+        "women's clothing including dresses, blouses, or feminine silhouettes",
+    ],
+    [  # neutral
+        "a gender-neutral outfit with unisex clothing and no gendered elements",
+        "an androgynous look with oversized silhouettes and neutral tones",
+        "unisex streetwear that works equally well for any gender presentation",
+    ],
+]
+_CLIP_FREQUENCY_PROMPTS: list[list[str]] = [
+    [  # occasional
+        "a special occasion outfit for a rare event like a wedding or gala",
+        "formal attire reserved for once-in-a-while events and ceremonies",
+        "a dressed-up look clearly intended for a special or infrequent occasion",
+    ],
+    [  # everyday
+        "a casual everyday outfit suitable for regular daily activities",
+        "relaxed everyday wear like jeans, t-shirts, or comfortable basics",
+        "a practical low-key outfit for a regular day at work or running errands",
+    ],
+]
 
 
 class CLIPImageScorer:
@@ -321,6 +384,8 @@ class CLIPImageScorer:
         self._formal_embs = [self._encode_texts(p) for p in _CLIP_FORMAL_PROMPTS]
         self._season_embs = [self._encode_texts(p) for p in _CLIP_SEASON_PROMPTS]
         self._time_embs = [self._encode_texts(p) for p in _CLIP_TIME_PROMPTS]
+        self._gender_embs = [self._encode_texts(p) for p in _CLIP_GENDER_PROMPTS]
+        self._frequency_embs = [self._encode_texts(p) for p in _CLIP_FREQUENCY_PROMPTS]
         logger.info("CLIPImageScorer ready")
 
     def score_image(self, image_bytes: bytes) -> ImageHeadProbabilities:
@@ -347,6 +412,8 @@ class CLIPImageScorer:
             formal=_class_probs(self._formal_embs),
             season=_class_probs(self._season_embs),
             time=_class_probs(self._time_embs),
+            gender=_class_probs(self._gender_embs),
+            frequency=_class_probs(self._frequency_embs),
         )
 
     def _encode_texts(self, prompts: list[str]):
