@@ -12,7 +12,7 @@ import uvicorn
 from vibescents.backend_app import create_app
 from vibescents.schemas import FragranceRecommendation, RecommendRequest, RecommendResponse
 
-LOCKED = Path(__file__).parent / "artifacts" / "week4" / "locked_responses.json"
+LOCKED = Path(__file__).parent.parent / "artifacts" / "week4" / "locked_responses.json"
 
 
 class StaticEngine:

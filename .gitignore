@@ -47,3 +47,9 @@ train/
 node_modules/
 .next/
 vibescent.zip
+
+# === Generated / tooling ===
+graphify-out/
+.codex
+.coverage
+coverage.xml
