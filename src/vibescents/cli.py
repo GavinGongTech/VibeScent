@@ -116,9 +116,7 @@ def main() -> None:
         if args.model:
             from vibescents.settings import Settings
 
-            settings = Settings(
-                settings=Settings.from_env()
-            )
+            settings = Settings(settings=Settings.from_env())
         generator = BenchmarkGenerator(settings=settings)
         consolidated = []
         for item in briefs:

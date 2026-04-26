@@ -126,7 +126,8 @@
       "Read(///wsl.localhost/ubuntu/home/bossman/projects/vibescent/app/**)",
       "Read(///wsl.localhost/ubuntu/home/bossman/projects/**)",
       "Bash(grep -E \"\\\\.\\(md|txt\\)$\")",
-      "Bash(./sync.sh *)"
+      "Bash(./sync.sh *)",
+      "Bash(xargs -I{} sh -c 'test -f \"{}\" && du -sm \"{}\"')"
     ]
   }
 }

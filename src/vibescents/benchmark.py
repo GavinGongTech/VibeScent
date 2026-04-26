@@ -9,6 +9,7 @@ from typing import Iterable, Protocol
 from pydantic import ValidationError
 
 from vibescents.schemas import BenchmarkCaseDraft, BenchmarkCaseLabel
+from vibescents.settings import Settings
 from vibescents.similarity import frequent_items, majority_vote
 
 BENCHMARK_PROMPT = """\
@@ -90,9 +91,10 @@ def _build_outlines_generator(model_name: str):
         raise ImportError(
             "Qwen provider requires `outlines`. Install it in Colab with notebooks/requirements.colab.txt."
         ) from exc
-        
+
     try:
         import vllm
+
         llm = vllm.LLM(model=model_name, trust_remote_code=True)
         if hasattr(outlines.models, "VLLMOffline"):
             model = outlines.models.VLLMOffline(llm)
@@ -100,13 +102,16 @@ def _build_outlines_generator(model_name: str):
             model = outlines.models.vllm(model_name)
     except Exception:
         from transformers import AutoModelForCausalLM, AutoTokenizer
+
         tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-        hf_model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", trust_remote_code=True)
+        hf_model = AutoModelForCausalLM.from_pretrained(
+            model_name, device_map="auto", trust_remote_code=True
+        )
         if hasattr(outlines.models, "Transformers"):
             model = outlines.models.Transformers(hf_model, tokenizer)
         else:
             model = outlines.models.transformers(model_name, device="cuda")
-            
+
     return model
 
 

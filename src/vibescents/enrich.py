@@ -12,6 +12,7 @@ import pandas as pd
 from pydantic import ValidationError
 
 from vibescents.schemas import EnrichmentSchemaV2
+
 # No API key needed — any HuggingFace instruct model works
 # Alternatives: "Qwen/Qwen3-14B", "google/gemma-3-12b-it", "google/gemma-3-27b-it"
 LOCAL_ENRICHMENT_MODEL = "Qwen/Qwen3-8B"
@@ -46,6 +47,7 @@ class EnrichmentClient(Protocol):
     def generate_batch(self, prompts: list[str]) -> list[EnrichmentSchemaV2 | None]:
         """Generate a batch of enrichment objects."""
 
+
 @dataclass
 class QwenOutlinesEnrichmentClient:
     model_name: str = QWEN_ENRICHMENT_MODEL
@@ -67,14 +69,14 @@ class QwenOutlinesEnrichmentClient:
 
     def generate_batch(self, prompts: list[str]) -> list[EnrichmentSchemaV2 | None]:
         full_prompts = [f"{SYSTEM_PROMPT}\n\n{prompt}" for prompt in prompts]
-        
+
         # outlines generators support batching by passing a list of prompts
         try:
             raw_outputs = self._generator(full_prompts)
         except Exception:
             # Fallback for older versions or if batching fails
             raw_outputs = [self._generator(p) for p in full_prompts]
-        
+
         results = []
         for raw in raw_outputs:
             parsed = _parse_enrichment(raw)
@@ -132,7 +134,9 @@ class VLLMNativeEnrichmentClient:
         parsed = _parse_enrichment(repaired)
         if parsed is not None:
             return parsed
-        raise ValueError("vLLM native output could not be parsed into EnrichmentSchemaV2.")
+        raise ValueError(
+            "vLLM native output could not be parsed into EnrichmentSchemaV2."
+        )
 
     def generate_batch(self, prompts: list[str]) -> list[EnrichmentSchemaV2 | None]:
         full_prompts = [f"{SYSTEM_PROMPT}\n\n{prompt}" for prompt in prompts]
@@ -160,9 +164,10 @@ def _build_outlines_generator(model_name: str, schema: Any):
         raise ImportError(
             "Local LLM enrichment requires outlines: pip install outlines transformers accelerate"
         ) from exc
-        
+
     try:
         import vllm
+
         print(f"Attempting to load {model_name} via vLLM...")
         llm = vllm.LLM(model=model_name, trust_remote_code=True)
         # Outlines >= 1.0
@@ -173,18 +178,15 @@ def _build_outlines_generator(model_name: str, schema: Any):
     except Exception as e:
         print(f"vLLM load failed: {e}. Falling back to transformers (slower).")
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        import torch
+
         tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-        
+
         # Use torch_dtype="auto" to ensure we use the model's native precision (bf16/fp16)
         # instead of float32, which often causes VRAM overflow and CPU offloading.
         hf_model = AutoModelForCausalLM.from_pretrained(
-            model_name, 
-            device_map="auto", 
-            torch_dtype="auto", 
-            trust_remote_code=True
+            model_name, device_map="auto", torch_dtype="auto", trust_remote_code=True
         )
-        
+
         if hasattr(outlines.models, "Transformers"):
             model = outlines.models.Transformers(hf_model, tokenizer)
         else:
@@ -193,8 +195,10 @@ def _build_outlines_generator(model_name: str, schema: Any):
                 model = outlines.models.transformers(hf_model, tokenizer)
             except Exception:
                 # Fallback to model name
-                model = outlines.models.transformers(model_name, device="cuda", trust_remote_code=True)
-            
+                model = outlines.models.transformers(
+                    model_name, device="cuda", trust_remote_code=True
+                )
+
     return outlines.generate.json(model, schema)
 
 
@@ -242,7 +246,7 @@ def _build_prompt(row: pd.Series) -> str:
 
 
 def _shrink_prompt(prompt: str, factor: float = 0.7) -> str:
-    clipped = prompt[ : max(1, int(len(prompt) * factor))]
+    clipped = prompt[: max(1, int(len(prompt) * factor))]
     return clipped if clipped.endswith("\n") else f"{clipped}\n"
 
 
@@ -306,7 +310,7 @@ def enrich_dataframe(
 
         prompts = [_build_prompt(row) for _, row in batch.iterrows()]
         indices = batch.index.tolist()
-        
+
         try:
             records = client.generate_batch(prompts)
             for i, record in enumerate(records):
@@ -324,7 +328,7 @@ def enrich_dataframe(
                             error=f"Batch fail; retry={retry_exc}",
                         )
                         continue
-                
+
                 for column in ENRICHMENT_COLUMNS:
                     work.at[idx, column] = _serialize_value(getattr(record, column))
                 processed += 1
@@ -454,8 +458,11 @@ def main() -> None:
     parser.add_argument("--output-csv", required=True)
     parser.add_argument("--max-rows", type=int, default=None)
     parser.add_argument("--resume-from", type=int, default=0)
-    parser.add_argument("--model", default=LOCAL_ENRICHMENT_MODEL,
-        help="HF model: Qwen/Qwen3-8B, google/gemma-3-12b-it, etc.")
+    parser.add_argument(
+        "--model",
+        default=LOCAL_ENRICHMENT_MODEL,
+        help="HF model: Qwen/Qwen3-8B, google/gemma-3-12b-it, etc.",
+    )
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument(
         "--failures-log", default=None, help="Optional JSONL path for failed rows."

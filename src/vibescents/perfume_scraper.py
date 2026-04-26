@@ -12,7 +12,14 @@ SERPAPI_URL = "https://serpapi.com/search"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_PATH = _REPO_ROOT / "artifacts" / "perfume_results.json"
 
-PRIORITY_STORES = ["sephora", "nordstrom", "macy", "bloomingdale", "neiman marcus", "ulta"]
+PRIORITY_STORES = [
+    "sephora",
+    "nordstrom",
+    "macy",
+    "bloomingdale",
+    "neiman marcus",
+    "ulta",
+]
 
 
 def _store_priority(store: str) -> int:

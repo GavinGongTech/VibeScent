@@ -52,6 +52,7 @@ class Qwen3VLMultimodalEmbedder:
         **_kwargs,
     ) -> np.ndarray:
         from tqdm.auto import tqdm
+
         text_list = list(texts)
         if not text_list:
             return np.empty((0, 0), dtype=np.float32)

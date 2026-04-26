@@ -42,7 +42,11 @@ def compute_structured_scores(ctx: ContextInput, df: pd.DataFrame) -> np.ndarray
     weight_total = 0.0
 
     def _coerce(col: str) -> np.ndarray:
-        return pd.to_numeric(df[col], errors="coerce").fillna(0.5).values.astype(np.float32)
+        return (
+            pd.to_numeric(df[col], errors="coerce")
+            .fillna(0.5)
+            .values.astype(np.float32)
+        )
 
     if ctx.eventType and ctx.eventType in _FORMALITY_TARGETS:
         target = _FORMALITY_TARGETS[ctx.eventType]

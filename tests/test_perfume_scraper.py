@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -63,11 +62,26 @@ def test_search_perfume_filters_over_budget() -> None:
     resp = MagicMock()
     resp.json.return_value = {
         "shopping_results": [
-            {"price": "0.00", "source": "Sephora", "title": "A", "product_link": "http://a", "thumbnail": ""},
-            {"price": "00.00", "source": "Nordstrom", "title": "B", "product_link": "http://b", "thumbnail": ""},
+            {
+                "price": "0.00",
+                "source": "Sephora",
+                "title": "A",
+                "product_link": "http://a",
+                "thumbnail": "",
+            },
+            {
+                "price": "00.00",
+                "source": "Nordstrom",
+                "title": "B",
+                "product_link": "http://b",
+                "thumbnail": "",
+            },
         ]
     }
-    with patch("vibescents.perfume_scraper.SERPAPI_KEY", "fake-key"),          patch("requests.get", return_value=resp):
+    with (
+        patch("vibescents.perfume_scraper.SERPAPI_KEY", "fake-key"),
+        patch("requests.get", return_value=resp),
+    ):
         results = search_perfume("Chanel No 5", 100.0)
     assert len(results) == 1
     assert results[0]["price"] == pytest.approx(50.0)
@@ -77,11 +91,26 @@ def test_search_perfume_sorts_by_priority_store() -> None:
     resp = MagicMock()
     resp.json.return_value = {
         "shopping_results": [
-            {"price": "0.00", "source": "Some Store", "title": "A", "product_link": "http://a", "thumbnail": ""},
-            {"price": "0.00", "source": "Sephora", "title": "B", "product_link": "http://b", "thumbnail": ""},
+            {
+                "price": "0.00",
+                "source": "Some Store",
+                "title": "A",
+                "product_link": "http://a",
+                "thumbnail": "",
+            },
+            {
+                "price": "0.00",
+                "source": "Sephora",
+                "title": "B",
+                "product_link": "http://b",
+                "thumbnail": "",
+            },
         ]
     }
-    with patch("vibescents.perfume_scraper.SERPAPI_KEY", "fake-key"),          patch("requests.get", return_value=resp):
+    with (
+        patch("vibescents.perfume_scraper.SERPAPI_KEY", "fake-key"),
+        patch("requests.get", return_value=resp),
+    ):
         results = search_perfume("Chanel No 5", 200.0)
     # Sephora should sort first despite higher price
     assert results[0]["store"] == "Sephora"
@@ -89,7 +118,11 @@ def test_search_perfume_sorts_by_priority_store() -> None:
 
 def test_search_perfume_request_error_returns_empty() -> None:
     import requests as req_mod
-    with patch("vibescents.perfume_scraper.SERPAPI_KEY", "fake-key"),          patch("requests.get", side_effect=req_mod.RequestException("timeout")):
+
+    with (
+        patch("vibescents.perfume_scraper.SERPAPI_KEY", "fake-key"),
+        patch("requests.get", side_effect=req_mod.RequestException("timeout")),
+    ):
         results = search_perfume("Chanel No 5", 100.0)
     assert results == []
 
@@ -98,14 +131,27 @@ def test_search_perfume_request_error_returns_empty() -> None:
 
 
 def test_search_perfumes_returns_one_per_fragrance(tmp_path) -> None:
-    fake_result = {"name": "A", "price": 50.0, "store": "Sephora", "url": "http://a", "thumbnail": "", "in_budget": True}
-    with patch("vibescents.perfume_scraper.search_perfume", return_value=[fake_result]),          patch("vibescents.perfume_scraper.OUTPUT_PATH", tmp_path / "out.json"):
+    fake_result = {
+        "name": "A",
+        "price": 50.0,
+        "store": "Sephora",
+        "url": "http://a",
+        "thumbnail": "",
+        "in_budget": True,
+    }
+    with (
+        patch("vibescents.perfume_scraper.search_perfume", return_value=[fake_result]),
+        patch("vibescents.perfume_scraper.OUTPUT_PATH", tmp_path / "out.json"),
+    ):
         results = search_perfumes(["Fragrance A", "Fragrance B"], 100.0)
     assert len(results) == 2
 
 
 def test_search_perfumes_none_for_no_match(tmp_path) -> None:
-    with patch("vibescents.perfume_scraper.search_perfume", return_value=[]),          patch("vibescents.perfume_scraper.OUTPUT_PATH", tmp_path / "out.json"):
+    with (
+        patch("vibescents.perfume_scraper.search_perfume", return_value=[]),
+        patch("vibescents.perfume_scraper.OUTPUT_PATH", tmp_path / "out.json"),
+    ):
         results = search_perfumes(["Unknown"], 100.0)
     assert results == [None]
 
@@ -113,6 +159,9 @@ def test_search_perfumes_none_for_no_match(tmp_path) -> None:
 def test_search_perfumes_writes_json(tmp_path) -> None:
     fake_result = {"name": "A", "price": 50.0, "store": "Sephora"}
     out_path = tmp_path / "out.json"
-    with patch("vibescents.perfume_scraper.search_perfume", return_value=[fake_result]),          patch("vibescents.perfume_scraper.OUTPUT_PATH", out_path):
+    with (
+        patch("vibescents.perfume_scraper.search_perfume", return_value=[fake_result]),
+        patch("vibescents.perfume_scraper.OUTPUT_PATH", out_path),
+    ):
         search_perfumes(["A"], 100.0)
     assert out_path.exists()

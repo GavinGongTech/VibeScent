@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
@@ -20,7 +19,11 @@ from vibescents.schemas import (
     RecommendResponse,
 )
 from vibescents.settings import Settings
-from vibescents.similarity import cosine_similarity_matrix, normalize_rows, top_k_indices
+from vibescents.similarity import (
+    cosine_similarity_matrix,
+    normalize_rows,
+    top_k_indices,
+)
 from vibescents.structured_scorer import compute_structured_scores
 
 logger = logging.getLogger(__name__)
@@ -95,7 +98,9 @@ class VibeScoreEngine:
     # Public API
     # ------------------------------------------------------------------
 
-    def recommend(self, *, request: RecommendRequest, image_bytes: bytes) -> RecommendResponse:
+    def recommend(
+        self, *, request: RecommendRequest, image_bytes: bytes
+    ) -> RecommendResponse:
         query_str = context_to_query_string(request.context)
         logger.info("Query: %r", query_str)
 
@@ -115,11 +120,16 @@ class VibeScoreEngine:
         multi_scores: np.ndarray | None = None
         if embedder is not None and image_bytes:
             try:
-                import os as _os, tempfile as _tmf
+                import os as _os
+                import tempfile as _tmf
+
                 with _tmf.NamedTemporaryFile(suffix=".jpg", delete=False) as _f:
-                    _f.write(image_bytes); _tmp = _f.name
+                    _f.write(image_bytes)
+                    _tmp = _f.name
                 try:
-                    mm_emb = embedder.embed_multimodal_query(text=query_str, image_path=_tmp)
+                    mm_emb = embedder.embed_multimodal_query(
+                        text=query_str, image_path=_tmp
+                    )
                 finally:
                     _os.unlink(_tmp)
                 mm_emb = normalize_rows(mm_emb.astype(np.float32))
@@ -142,6 +152,7 @@ class VibeScoreEngine:
         top3_indices = top_k_indices(fused, 3)
 
         return self._build_response(top3_indices, fused, request.context)
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -156,7 +167,8 @@ class VibeScoreEngine:
                 self._embedder = Qwen3VLMultimodalEmbedder(self._settings)
             except Exception as exc:
                 logger.warning(
-                    "Qwen3-VL embedder unavailable (no GPU?), text/multimodal channels disabled: %s", exc
+                    "Qwen3-VL embedder unavailable (no GPU?), text/multimodal channels disabled: %s",
+                    exc,
                 )
                 self._embedder = self._EMBEDDER_UNAVAILABLE
                 return None
@@ -207,15 +219,34 @@ class VibeScoreEngine:
         structured: np.ndarray,
     ) -> np.ndarray:
         if text is not None and multi is not None and image is not None:
-            return fuse_scores({"text": text, "multimodal": multi, "image": image, "structured": structured}, weights=_FULL_WEIGHTS)
+            return fuse_scores(
+                {
+                    "text": text,
+                    "multimodal": multi,
+                    "image": image,
+                    "structured": structured,
+                },
+                weights=_FULL_WEIGHTS,
+            )
         if text is not None and multi is not None:
-            return fuse_scores({"text": text, "multimodal": multi, "structured": structured}, weights=_NO_IMAGE_WEIGHTS)
+            return fuse_scores(
+                {"text": text, "multimodal": multi, "structured": structured},
+                weights=_NO_IMAGE_WEIGHTS,
+            )
         if text is not None and image is not None:
-            return fuse_scores({"text": text, "image": image, "structured": structured}, weights=_NO_MULTI_WEIGHTS)
+            return fuse_scores(
+                {"text": text, "image": image, "structured": structured},
+                weights=_NO_MULTI_WEIGHTS,
+            )
         if text is not None:
-            return fuse_scores({"text": text, "structured": structured}, weights=_TEXT_ONLY_WEIGHTS)
+            return fuse_scores(
+                {"text": text, "structured": structured}, weights=_TEXT_ONLY_WEIGHTS
+            )
         if image is not None:
-            return fuse_scores({"image": image, "structured": structured}, weights={"image": 0.70, "structured": 0.30})
+            return fuse_scores(
+                {"image": image, "structured": structured},
+                weights={"image": 0.70, "structured": 0.30},
+            )
         return structured
 
     def _build_response(
@@ -229,8 +260,12 @@ class VibeScoreEngine:
 
         for rank, idx in enumerate(top_indices, start=1):
             row = df.iloc[int(idx)]
-            notes = _parse_notes(row.get("top_notes"), row.get("middle_notes"), row.get("base_notes"))
-            occasion = _str_or_none(row.get("likely_occasion")) or ctx.eventType or "Evening"
+            notes = _parse_notes(
+                row.get("top_notes"), row.get("middle_notes"), row.get("base_notes")
+            )
+            occasion = (
+                _str_or_none(row.get("likely_occasion")) or ctx.eventType or "Evening"
+            )
             reasoning = (
                 _str_or_none(row.get("vibe_sentence"))
                 or "A distinctive fragrance selected for your look."
@@ -253,6 +288,7 @@ class VibeScoreEngine:
 # ------------------------------------------------------------------
 # Module-level utilities
 # ------------------------------------------------------------------
+
 
 def _parse_notes(*fields: object) -> list[str]:
     notes: list[str] = []

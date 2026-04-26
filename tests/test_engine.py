@@ -11,6 +11,7 @@ from vibescents.schemas import ContextInput
 
 # ---- module-level helpers ----
 
+
 def test_parse_notes_basic() -> None:
     result = _parse_notes("rose, jasmine", "amber, musk", "sandalwood")
     assert "rose" in result
@@ -56,22 +57,35 @@ def test_str_or_none_empty_returns_none() -> None:
 
 # ---- VibeScoreEngine construction ----
 
+
 def _make_engine(n: int = 10) -> tuple[VibeScoreEngine, pd.DataFrame]:
     embeddings = np.random.rand(n, 64).astype(np.float32)
-    df = pd.DataFrame({
-        "name": [f"Fragrance {i}" for i in range(n)],
-        "brand": ["Brand"] * n,
-        "formality": np.linspace(0.0, 1.0, n),
-        "day_night": np.linspace(0.0, 1.0, n),
-        "fresh_warm": np.linspace(0.0, 1.0, n),
-        "likely_season": ["spring", "summer", "fall", "winter", "all-season",
-                          "spring", "summer", "fall", "winter", "all-season"][:n],
-        "likely_occasion": ["Evening"] * n,
-        "vibe_sentence": ["A nice scent."] * n,
-        "top_notes": ["rose"] * n,
-        "middle_notes": ["amber"] * n,
-        "base_notes": ["musk"] * n,
-    })
+    df = pd.DataFrame(
+        {
+            "name": [f"Fragrance {i}" for i in range(n)],
+            "brand": ["Brand"] * n,
+            "formality": np.linspace(0.0, 1.0, n),
+            "day_night": np.linspace(0.0, 1.0, n),
+            "fresh_warm": np.linspace(0.0, 1.0, n),
+            "likely_season": [
+                "spring",
+                "summer",
+                "fall",
+                "winter",
+                "all-season",
+                "spring",
+                "summer",
+                "fall",
+                "winter",
+                "all-season",
+            ][:n],
+            "likely_occasion": ["Evening"] * n,
+            "vibe_sentence": ["A nice scent."] * n,
+            "top_notes": ["rose"] * n,
+            "middle_notes": ["amber"] * n,
+            "base_notes": ["musk"] * n,
+        }
+    )
     return VibeScoreEngine(corpus_embeddings=embeddings, corpus_df=df), df
 
 
@@ -82,6 +96,7 @@ def test_engine_init_normalises_embeddings() -> None:
 
 
 # ---- _fuse ----
+
 
 def test_fuse_structured_only() -> None:
     engine, _ = _make_engine(5)
@@ -127,6 +142,7 @@ def test_fuse_image_and_structured_fallback() -> None:
 
 # ---- _vectorised_image_scores ----
 
+
 def test_vectorised_image_scores_shape() -> None:
     engine, _ = _make_engine(10)
     probs = ImageHeadProbabilities(
@@ -142,19 +158,21 @@ def test_vectorised_image_scores_shape() -> None:
 def test_vectorised_image_scores_handles_empty_season() -> None:
     n = 5
     embeddings = np.random.rand(n, 32).astype(np.float32)
-    df = pd.DataFrame({
-        "name": [f"F{i}" for i in range(n)],
-        "brand": ["B"] * n,
-        "formality": [0.5] * n,
-        "day_night": [0.5] * n,
-        "fresh_warm": [0.5] * n,
-        "likely_season": ["", "nan", "all-season", "spring", "summer"],
-        "likely_occasion": ["Evening"] * n,
-        "vibe_sentence": ["x"] * n,
-        "top_notes": ["rose"] * n,
-        "middle_notes": ["amber"] * n,
-        "base_notes": ["musk"] * n,
-    })
+    df = pd.DataFrame(
+        {
+            "name": [f"F{i}" for i in range(n)],
+            "brand": ["B"] * n,
+            "formality": [0.5] * n,
+            "day_night": [0.5] * n,
+            "fresh_warm": [0.5] * n,
+            "likely_season": ["", "nan", "all-season", "spring", "summer"],
+            "likely_occasion": ["Evening"] * n,
+            "vibe_sentence": ["x"] * n,
+            "top_notes": ["rose"] * n,
+            "middle_notes": ["amber"] * n,
+            "base_notes": ["musk"] * n,
+        }
+    )
     engine = VibeScoreEngine(corpus_embeddings=embeddings, corpus_df=df)
     probs = ImageHeadProbabilities(
         formal=np.array([0.3, 0.5, 0.2]),
@@ -166,6 +184,7 @@ def test_vectorised_image_scores_handles_empty_season() -> None:
 
 
 # ---- _build_response ----
+
 
 def test_build_response_top_3() -> None:
     engine, _ = _make_engine(10)
@@ -189,11 +208,17 @@ def test_build_response_fallback_occasion() -> None:
 
 # ---- _get_embedder sentinel ----
 
+
 def test_get_embedder_marks_unavailable_on_failure() -> None:
     engine, _ = _make_engine(3)
     with pytest.MonkeyPatch().context() as mp:
         import vibescents.embeddings as emb_mod
-        mp.setattr(emb_mod, "Qwen3VLMultimodalEmbedder", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("no GPU")))
+
+        mp.setattr(
+            emb_mod,
+            "Qwen3VLMultimodalEmbedder",
+            lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("no GPU")),
+        )
         result = engine._get_embedder()
     assert result is None
     assert engine._embedder is VibeScoreEngine._EMBEDDER_UNAVAILABLE

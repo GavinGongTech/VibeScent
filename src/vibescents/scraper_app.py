@@ -34,13 +34,15 @@ def search(req: SearchRequest) -> list[dict]:
         clean_results = []
         for i, res in enumerate(raw_results):
             if res is None:
-                clean_results.append({
-                    "name": req.perfumes[i],
-                    "price": "N/A",
-                    "store": "Unavailable",
-                    "purchaseUrl": "#",
-                    "thumbnail": None,
-                })
+                clean_results.append(
+                    {
+                        "name": req.perfumes[i],
+                        "price": "N/A",
+                        "store": "Unavailable",
+                        "purchaseUrl": "#",
+                        "thumbnail": None,
+                    }
+                )
             else:
                 clean_results.append({**res, "name": req.perfumes[i]})
 
@@ -51,7 +53,9 @@ def search(req: SearchRequest) -> list[dict]:
         raise HTTPException(status_code=500, detail=str(exc))
     except Exception as e:
         print(f"[scraper] Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error during scraping.")
+        raise HTTPException(
+            status_code=500, detail="Internal Server Error during scraping."
+        )
 
 
 if __name__ == "__main__":

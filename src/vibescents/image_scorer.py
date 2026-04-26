@@ -48,8 +48,10 @@ class SigLIP2ImageScorer:
         from transformers import AutoModel, AutoProcessor
 
         self._device = (
-            torch.device("cuda") if torch.cuda.is_available()
-            else torch.device("mps") if torch.backends.mps.is_available()
+            torch.device("cuda")
+            if torch.cuda.is_available()
+            else torch.device("mps")
+            if torch.backends.mps.is_available()
             else torch.device("cpu")
         )
         logger.info("SigLIP2ImageScorer loading %s on %s", model_name, self._device)
@@ -66,24 +68,31 @@ class SigLIP2ImageScorer:
         )
 
         # Pre-encode all text prompts once
-        self._formal_embs = self._encode_texts(_FORMAL_PROMPTS)   # (3, D)
-        self._season_embs = self._encode_texts(_SEASON_PROMPTS)   # (4, D)
-        self._time_embs   = self._encode_texts(_TIME_PROMPTS)     # (2, D)
-        logger.info("SigLIP2ImageScorer ready (logit_scale=%.2f, logit_bias=%.4f)",
-                    self._logit_scale, self._logit_bias)
+        self._formal_embs = self._encode_texts(_FORMAL_PROMPTS)  # (3, D)
+        self._season_embs = self._encode_texts(_SEASON_PROMPTS)  # (4, D)
+        self._time_embs = self._encode_texts(_TIME_PROMPTS)  # (2, D)
+        logger.info(
+            "SigLIP2ImageScorer ready (logit_scale=%.2f, logit_bias=%.4f)",
+            self._logit_scale,
+            self._logit_bias,
+        )
 
     def score_image(self, image_bytes: bytes) -> ImageHeadProbabilities:
         """Run SigLIP 2 zero-shot on raw image bytes → ImageHeadProbabilities."""
         import torch.nn.functional as F
 
-        img = __import__("PIL.Image", fromlist=["Image"]).Image.open(BytesIO(image_bytes)).convert("RGB")
+        img = (
+            __import__("PIL.Image", fromlist=["Image"])
+            .Image.open(BytesIO(image_bytes))
+            .convert("RGB")
+        )
         inputs = self._processor(images=[img], return_tensors="pt").to(self._device)
         with self._torch.no_grad():
             img_emb = self._model.get_image_features(**inputs)  # (1, D)
             img_emb = F.normalize(img_emb, dim=-1)
 
         def _probs(text_embs) -> np.ndarray:
-            sims = (img_emb @ text_embs.T).squeeze(0)          # (N,)
+            sims = (img_emb @ text_embs.T).squeeze(0)  # (N,)
             logits = self._logit_scale * sims + self._logit_bias
             return F.softmax(logits, dim=-1).cpu().float().numpy()
 
@@ -95,7 +104,10 @@ class SigLIP2ImageScorer:
 
     def _encode_texts(self, prompts: list[str]) -> np.ndarray:
         import torch.nn.functional as F
-        inputs = self._processor(text=prompts, return_tensors="pt", padding="max_length", truncation=True).to(self._device)
+
+        inputs = self._processor(
+            text=prompts, return_tensors="pt", padding="max_length", truncation=True
+        ).to(self._device)
         with self._torch.no_grad():
             embs = self._model.get_text_features(**inputs)
             return F.normalize(embs, dim=-1)  # (N, D)

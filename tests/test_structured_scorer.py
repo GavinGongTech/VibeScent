@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from vibescents.schemas import ContextInput
 from vibescents.structured_scorer import compute_structured_scores
@@ -54,11 +53,13 @@ def test_unknown_event_type_falls_back_to_half() -> None:
 
 
 def test_nan_values_filled_gracefully() -> None:
-    df = pd.DataFrame({
-        "formality": [float("nan"), 0.5],
-        "day_night": [0.3, float("nan")],
-        "fresh_warm": [0.2, 0.8],
-    })
+    df = pd.DataFrame(
+        {
+            "formality": [float("nan"), 0.5],
+            "day_night": [0.3, float("nan")],
+            "fresh_warm": [0.2, 0.8],
+        }
+    )
     ctx = ContextInput(eventType="Gala", timeOfDay="Evening", mood="Fresh")
     scores = compute_structured_scores(ctx, df)
     assert not np.any(np.isnan(scores))
