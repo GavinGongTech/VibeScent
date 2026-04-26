@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
 from vibescents.fusion import min_max_normalize
+
+logger = logging.getLogger(__name__)
 
 SEASON_INDEX = {
     "spring": 0,
@@ -230,3 +234,123 @@ def _coerce_str(value: Any, name: str) -> str:
     if not text:
         raise ValueError(f"{name} must not be empty.")
     return text
+
+
+_CLIP_MODEL = "openai/clip-vit-large-patch14"
+
+# Neil's prompt bank from vibes.json — 3 prompts per class, ordered to match
+# ImageHeadProbabilities indices: formal[0]=casual/[1]=smart-casual/[2]=formal;
+# season[0]=spring/[1]=summer/[2]=fall/[3]=winter; time[0]=day/[1]=night.
+_CLIP_FORMAL_PROMPTS: list[list[str]] = [
+    [
+        "a person in ripped jeans and a graphic tee with sneakers",
+        "someone in sweatpants and a hoodie running errands",
+        "a relaxed weekend outfit with shorts and sandals",
+    ],
+    [
+        "a person in chinos and a button down shirt with loafers",
+        "a smart casual outfit with dark jeans and a blazer",
+        "a neat polished look with trousers and a tucked in shirt",
+    ],
+    [
+        "a person in a tailored suit and tie at a business meeting",
+        "a woman in a floor length gown at a black tie event",
+        "formal eveningwear including a tuxedo or cocktail dress",
+    ],
+]
+_CLIP_SEASON_PROMPTS: list[list[str]] = [
+    [
+        "a light spring outfit with pastel colors and a thin jacket",
+        "spring fashion featuring floral prints and transitional layers",
+        "clothing suited for mild spring weather with light breathable fabrics",
+    ],
+    [
+        "a summer outfit with shorts, sandals, and a lightweight top",
+        "bright beach-ready summer wear for hot sunny weather",
+        "minimal breathable summer clothing like sundresses or linen shirts",
+    ],
+    [
+        "a fall outfit featuring warm earth tones, a cozy sweater, and boots",
+        "autumn fashion with layered clothing, scarves, and plaid patterns",
+        "transitional fall attire with a medium-weight jacket and warm colors",
+    ],
+    [
+        "a winter outfit with a heavy coat, scarf, gloves, and warm layers",
+        "cold-weather clothing including a wool coat and insulated boots",
+        "bundled-up winter fashion for freezing temperatures and snow",
+    ],
+]
+_CLIP_TIME_PROMPTS: list[list[str]] = [
+    [
+        "light-colored or pastel clothing in breathable natural fabrics like cotton or linen",
+        "structured practical daywear such as chinos, a polo shirt, or a casual button-down",
+        "low-key versatile outfit with subdued tones and comfortable everyday fabrics",
+    ],
+    [
+        "a nighttime outfit for going out to bars, clubs, or evening events",
+        "dark or glamorous evening wear suited for nightlife",
+        "an outfit styled for after-dark occasions with bold or sleek aesthetics",
+    ],
+]
+
+
+class CLIPImageScorer:
+    """CLIP ViT-L/14 zero-shot classifier → ImageHeadProbabilities.
+
+    Uses Neil's prompt bank (3 prompts per class). Per class, similarities are
+    averaged across prompts before softmax — matching Neil's score_classification
+    approach in backend/clip_zero_shot.py.
+    """
+
+    def __init__(self, model_name: str = _CLIP_MODEL) -> None:
+        import torch
+        from transformers import CLIPModel, CLIPProcessor
+
+        self._device = (
+            torch.device("cuda")
+            if torch.cuda.is_available()
+            else torch.device("mps")
+            if torch.backends.mps.is_available()
+            else torch.device("cpu")
+        )
+        logger.info("CLIPImageScorer loading %s on %s", model_name, self._device)
+        self._processor = CLIPProcessor.from_pretrained(model_name)
+        self._model = CLIPModel.from_pretrained(model_name).to(self._device).eval()
+        self._torch = torch
+
+        self._formal_embs = [self._encode_texts(p) for p in _CLIP_FORMAL_PROMPTS]
+        self._season_embs = [self._encode_texts(p) for p in _CLIP_SEASON_PROMPTS]
+        self._time_embs = [self._encode_texts(p) for p in _CLIP_TIME_PROMPTS]
+        logger.info("CLIPImageScorer ready")
+
+    def score_image(self, image_bytes: bytes) -> ImageHeadProbabilities:
+        import torch.nn.functional as F
+
+        img = __import__("PIL.Image", fromlist=["Image"]).Image.open(BytesIO(image_bytes)).convert("RGB")
+        inputs = self._processor(images=img, return_tensors="pt").to(self._device)
+        with self._torch.no_grad():
+            img_emb = self._model.get_image_features(**inputs)
+            img_emb = F.normalize(img_emb, dim=-1)  # (1, D)
+
+        def _class_probs(class_emb_list: list) -> np.ndarray:
+            sims = self._torch.stack(
+                [(img_emb @ embs.T).mean(dim=-1) for embs in class_emb_list],
+                dim=-1,
+            ).squeeze(0)
+            return F.softmax(sims, dim=-1).cpu().float().numpy()
+
+        return ImageHeadProbabilities(
+            formal=_class_probs(self._formal_embs),
+            season=_class_probs(self._season_embs),
+            time=_class_probs(self._time_embs),
+        )
+
+    def _encode_texts(self, prompts: list[str]):
+        import torch.nn.functional as F
+
+        inputs = self._processor(
+            text=prompts, return_tensors="pt", padding=True, truncation=True
+        ).to(self._device)
+        with self._torch.no_grad():
+            embs = self._model.get_text_features(**inputs)
+            return F.normalize(embs, dim=-1)  # (N, D)

@@ -8,8 +8,7 @@ import pandas as pd
 
 from vibescents.embeddings import Qwen3VLMultimodalEmbedder
 from vibescents.fusion import fuse_scores
-from vibescents.image_scorer import SigLIP2ImageScorer
-from vibescents.image_scoring import ImageHeadProbabilities
+from vibescents.image_scoring import CLIPImageScorer, ImageHeadProbabilities
 from vibescents.io_utils import load_embeddings
 from vibescents.query import context_to_query_string
 from vibescents.schemas import (
@@ -43,7 +42,7 @@ class VibeScoreEngine:
     Channels:
       text (0.30)       — Qwen3-VL-Embedding-8B text query vs corpus
       multimodal (0.25) — Qwen3-VL-Embedding-8B image+text query vs corpus
-      image (0.30)      — SigLIP 2 zero-shot → vectorised NLL vs enriched-DF attributes
+      image (0.30)      — CLIP ViT-L/14 zero-shot → vectorised NLL vs enriched-DF attributes
       structured (0.15) — arithmetic context match vs enriched-DF numeric columns
 
     No LLM reranker in this engine (use VibeScentEngine in week5 notebook for full reranking).
@@ -66,7 +65,7 @@ class VibeScoreEngine:
         self._corpus_df = corpus_df.reset_index(drop=True)
         self._settings = settings or Settings.from_env()
         self._embedder: object = None  # Qwen3VLMultimodalEmbedder, lazy-loaded; _EMBEDDER_UNAVAILABLE sentinel if no GPU
-        self._siglip: SigLIP2ImageScorer | None = None
+        self._clip: CLIPImageScorer | None = None
 
     @classmethod
     def from_artifacts(
@@ -137,13 +136,13 @@ class VibeScoreEngine:
             except Exception as exc:
                 logger.warning("Multimodal embedding failed, skipping channel: %s", exc)
 
-        # Image channel — SigLIP 2 zero-shot
+        # Image channel — CLIP zero-shot
         image_scores: np.ndarray | None = None
         try:
-            head_probs = self._get_siglip().score_image(image_bytes)
+            head_probs = self._get_clip().score_image(image_bytes)
             image_scores = self._vectorised_image_scores(head_probs)
         except Exception as exc:
-            logger.warning("SigLIP 2 scoring failed, skipping image channel: %s", exc)
+            logger.warning("CLIP scoring failed, skipping image channel: %s", exc)
 
         # Structured channel — arithmetic match, never fails
         structured_scores = compute_structured_scores(request.context, self._corpus_df)
@@ -174,13 +173,13 @@ class VibeScoreEngine:
                 return None
         return self._embedder  # type: ignore[return-value]
 
-    def _get_siglip(self) -> SigLIP2ImageScorer:
-        if self._siglip is None:
-            self._siglip = SigLIP2ImageScorer()
-        return self._siglip
+    def _get_clip(self) -> CLIPImageScorer:
+        if self._clip is None:
+            self._clip = CLIPImageScorer()
+        return self._clip
 
     def _vectorised_image_scores(self, probs: ImageHeadProbabilities) -> np.ndarray:
-        """Score all corpus rows against SigLIP 2 probabilities using vectorised NLL."""
+        """Score all corpus rows against CLIP probabilities using vectorised NLL."""
         df = self._corpus_df
         eps = 1e-8
 
@@ -203,7 +202,7 @@ class VibeScoreEngine:
             dtype=int,
         )
 
-        # Look up the SigLIP 2 probability assigned to each fragrance's target class
+        # Look up the CLIP probability assigned to each fragrance's target class
         formal_p = np.clip(probs.formal[formal_targets], eps, 1.0)
         time_p = np.clip(probs.time[time_targets], eps, 1.0)
         season_p = np.clip(probs.season[season_targets], eps, 1.0)
