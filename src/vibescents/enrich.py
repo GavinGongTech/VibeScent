@@ -27,7 +27,12 @@ ENRICHMENT_COLUMNS = list(EnrichmentSchemaV2.model_fields.keys())
 SYSTEM_PROMPT = """\
 You are a fragrance expert. Given a perfume's metadata, generate structured vibe attributes.
 
-Rules:
+CRITICAL RULES:
+- Return ONLY the JSON object. 
+- DO NOT include internal reasoning, thinking, or preamble.
+- DO NOT use <think> tags.
+
+Schema Rules:
 - formality: 0.0 = very casual, 1.0 = black tie formal
 - fresh_warm: 0.0 = crisp/fresh, 1.0 = warm/cozy
 - day_night: 0.0 = daytime, 1.0 = evening/night
@@ -412,12 +417,28 @@ def _parse_enrichment(payload: Any) -> EnrichmentSchemaV2 | None:
             return payload
         if isinstance(payload, dict):
             return EnrichmentSchemaV2.model_validate(payload)
+        
         if isinstance(payload, str):
+            # 1. Strip reasoning blocks (e.g. <think>...</think>)
+            import re
+            cleaned = re.sub(r'<think>.*?</think>', '', payload, flags=re.DOTALL).strip()
+            
+            # 2. Try direct parse
             try:
-                parsed = json.loads(payload)
+                parsed = json.loads(cleaned)
+                return EnrichmentSchemaV2.model_validate(parsed)
             except json.JSONDecodeError:
-                return None
-            return EnrichmentSchemaV2.model_validate(parsed)
+                pass
+            
+            # 3. Extract JSON object using regex if model yapped around it
+            match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+            if match:
+                try:
+                    parsed = json.loads(match.group(0))
+                    return EnrichmentSchemaV2.model_validate(parsed)
+                except json.JSONDecodeError:
+                    pass
+                    
         return None
     except (ValidationError, TypeError, ValueError):
         return None
