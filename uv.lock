@@ -2504,7 +2504,6 @@ dependencies = [
     { name = "fastapi" },
     { name = "google-genai" },
     { name = "json-repair" },
-    { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pillow" },
@@ -2520,6 +2519,7 @@ cpu = [
 ]
 dev = [
     { name = "httpx" },
+    { name = "matplotlib" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
@@ -2538,7 +2538,7 @@ requires-dist = [
     { name = "google-genai" },
     { name = "httpx", marker = "extra == 'dev'" },
     { name = "json-repair" },
-    { name = "matplotlib" },
+    { name = "matplotlib", marker = "extra == 'dev'" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pillow" },
