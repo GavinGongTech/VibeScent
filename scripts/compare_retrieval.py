@@ -42,7 +42,10 @@ CORPORA = [
 
 def _check_artifacts() -> bool:
     missing = []
-    required = [ARTIFACTS / "occasions" / "embeddings.npy", ARTIFACTS / "occasions" / "metadata.csv"]
+    required = [
+        ARTIFACTS / "occasions" / "embeddings.npy",
+        ARTIFACTS / "occasions" / "metadata.csv",
+    ]
     for _, emb, meta in CORPORA:
         required += [emb, meta]
     for path in required:
@@ -101,13 +104,23 @@ def run_comparison(output_file: Path | None = None) -> None:
     total_overlap = 0
     for i, occ_row in occasions_meta.iterrows():
         occ_id = occ_row["occasion_id"]
-        raw_names = set(str(raw_meta.iloc[j].get("name", "")) for j in top_k_indices(raw_scores[i], TOP_K))
-        enr_names = set(str(enr_meta.iloc[j].get("name", "")) for j in top_k_indices(enr_scores[i], TOP_K))
+        raw_names = set(
+            str(raw_meta.iloc[j].get("name", ""))
+            for j in top_k_indices(raw_scores[i], TOP_K)
+        )
+        enr_names = set(
+            str(enr_meta.iloc[j].get("name", ""))
+            for j in top_k_indices(enr_scores[i], TOP_K)
+        )
         shared = len(raw_names & enr_names)
         total_overlap += shared
-        lines.append(f"  {occ_id}: {shared}/{TOP_K} shared  (changed: {TOP_K - shared})")
+        lines.append(
+            f"  {occ_id}: {shared}/{TOP_K} shared  (changed: {TOP_K - shared})"
+        )
     avg_overlap = total_overlap / len(occasions_meta)
-    lines.append(f"\n  Average overlap: {avg_overlap:.1f}/{TOP_K} — {'SIMILAR' if avg_overlap > 3 else 'DIVERGENT'} retrieval sets")
+    lines.append(
+        f"\n  Average overlap: {avg_overlap:.1f}/{TOP_K} — {'SIMILAR' if avg_overlap > 3 else 'DIVERGENT'} retrieval sets"
+    )
 
     report = "\n".join(lines)
     print(report)

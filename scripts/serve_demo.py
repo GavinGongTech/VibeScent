@@ -2,6 +2,7 @@
 Demo server — serves pre-cached locked responses, no GPU required.
 Run:  uv run python -m serve_demo
 """
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,11 @@ from pathlib import Path
 import uvicorn
 
 from vibescents.backend_app import create_app
-from vibescents.schemas import FragranceRecommendation, RecommendRequest, RecommendResponse
+from vibescents.schemas import (
+    FragranceRecommendation,
+    RecommendRequest,
+    RecommendResponse,
+)
 
 LOCKED = Path(__file__).parent.parent / "artifacts" / "week4" / "locked_responses.json"
 
@@ -21,11 +26,12 @@ class StaticEngine:
     def __init__(self) -> None:
         data = json.loads(LOCKED.read_text())
         self._recs = [
-            FragranceRecommendation(**r)
-            for r in data["default"]["recommendations"]
+            FragranceRecommendation(**r) for r in data["default"]["recommendations"]
         ]
 
-    def recommend(self, *, request: RecommendRequest, image_bytes: bytes) -> RecommendResponse:
+    def recommend(
+        self, *, request: RecommendRequest, image_bytes: bytes
+    ) -> RecommendResponse:
         return RecommendResponse(recommendations=self._recs)
 
 

@@ -456,37 +456,38 @@ def _flatten_schema(schema_json: dict[str, Any]) -> dict[str, Any]:
     return _resolve(schema_json)
 
 
-def _build_guided_decoding_params(schema_json: dict[str, Any]) -> Any | None:
+def _build_structured_outputs_params(schema_json: dict[str, Any]) -> Any:
+    """Return a StructuredOutputsParams or GuidedDecodingParams for the installed vLLM.
+
+    vLLM >= 0.20.0 uses StructuredOutputsParams; older versions used GuidedDecodingParams.
+    Raises RuntimeError if neither is present — the pipeline must not run without schema
+    enforcement because invalid JSON silently corrupts the corpus.
+    """
     flat = _flatten_schema(schema_json)
-    _last_err: list[str] = []
 
     for module_name, class_name in [
-        ("vllm.sampling_params", "GuidedDecodingParams"),
-        ("vllm.sampling_params", "GuidedDecodingConfig"),
+        ("vllm.sampling_params", "StructuredOutputsParams"),  # vLLM >= 0.20.0
+        ("vllm.sampling_params", "GuidedDecodingParams"),  # vLLM < 0.20.0
         ("vllm", "GuidedDecodingParams"),
-        ("vllm.entrypoints.openai.protocol", "GuidedDecodingParams"),
     ]:
         try:
             module = importlib.import_module(module_name)
-            guided_cls = getattr(module, class_name)
+            cls = getattr(module, class_name)
         except (ImportError, AttributeError):
             continue
 
-        for kwargs in (
-            {"json": json.dumps(flat)},
-            {"json": flat},
-            {"json_schema": flat},
-            {"schema": flat},
-        ):
-            try:
-                return guided_cls(**kwargs)
-            except Exception as exc:
-                _last_err.append(f"{class_name}({list(kwargs)}): {exc}")
-                continue
+        try:
+            return cls(json=flat)
+        except Exception as exc:
+            raise RuntimeError(
+                f"{class_name}(json=...) failed — schema may be malformed: {exc}"
+            ) from exc
 
-    if _last_err:
-        print(f"[DEBUG] GuidedDecodingParams attempts failed: {_last_err[-1]}")
-    return None
+    raise RuntimeError(
+        "vLLM structured outputs class not found. "
+        "Expected StructuredOutputsParams (vLLM >= 0.20.0) or GuidedDecodingParams. "
+        "Run: pip install 'vllm>=0.20.0'"
+    )
 
 
 def _build_vllm_sampling_params(
@@ -495,28 +496,25 @@ def _build_vllm_sampling_params(
     schema_json: dict[str, Any],
     max_tokens: int,
 ) -> Any:
-    base_kwargs = {"max_tokens": max_tokens, "temperature": 0.0}
+    """Build SamplingParams with structured output enforcement.
 
-    # 1. Try modern vLLM approach (GuidedDecodingParams object)
-    guided_decoding = _build_guided_decoding_params(schema_json)
-    if guided_decoding is not None:
+    Raises RuntimeError if schema enforcement cannot be configured — running without
+    it risks silent JSON parse failures that corrupt enrichment data permanently.
+    """
+    structured = _build_structured_outputs_params(schema_json)
+    base_kwargs: dict[str, Any] = {"max_tokens": max_tokens, "temperature": 0.0}
+
+    # vLLM >= 0.20.0 uses structured_outputs=; older versions use guided_decoding=
+    for kwarg in ("structured_outputs", "guided_decoding"):
         try:
-            return sampling_params_cls(**base_kwargs, guided_decoding=guided_decoding)
-        except Exception as exc:
-            print(f"[DEBUG] SamplingParams(guided_decoding=...) failed: {exc}")
+            return sampling_params_cls(**base_kwargs, **{kwarg: structured})
+        except TypeError:
+            continue
 
-    # 2. Try older vLLM approach (direct keywords in SamplingParams)
-    for key in ["guided_json", "json", "guided_decoding_json"]:
-        for val in [schema_json, json.dumps(schema_json)]:
-            try:
-                return sampling_params_cls(**base_kwargs, **{key: val})
-            except Exception:
-                continue
-
-    print(
-        "[WARN] vLLM guided decoding unavailable — using prompt-based schema enforcement instead."
+    raise RuntimeError(
+        "SamplingParams does not accept structured_outputs= or guided_decoding=. "
+        "Cannot enforce JSON schema on model output."
     )
-    return sampling_params_cls(**base_kwargs)
 
 
 def _call_with_schema(
@@ -710,18 +708,14 @@ def _append_failure_record(
 
 def _resolve_client(*, model_name: str | None) -> EnrichmentClient:
     effective = model_name or LOCAL_ENRICHMENT_MODEL
-    # 1. GPU: vLLM native guided decoding (fastest)
     try:
         return VLLMNativeEnrichmentClient(model_name=effective)
-    except Exception:
-        pass
-    # 2. Free API: Groq (CPU-friendly, ~42h for 35k rows, GROQ_API_KEY required)
-    try:
-        return GroqEnrichmentClient()
-    except EnvironmentError:
-        pass
-    # 3. Local CPU fallback: Outlines + transformers (slow)
-    return QwenOutlinesEnrichmentClient(model_name=effective)
+    except Exception as exc:
+        raise RuntimeError(
+            f"VLLMNativeEnrichmentClient failed to initialize: {exc}\n"
+            "To use an alternative backend, instantiate GroqEnrichmentClient or "
+            "QwenOutlinesEnrichmentClient directly instead of calling enrich_dataframe()."
+        ) from exc
 
 
 def enrich_dataframe(

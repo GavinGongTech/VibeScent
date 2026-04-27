@@ -10,6 +10,7 @@ Usage:
 
 Resumes automatically from checkpoint on restart.
 """
+
 from __future__ import annotations
 
 import os
@@ -21,12 +22,16 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import pandas as pd
 
-from vibescents.enrich import GroqEnrichmentClient, enrich_dataframe, build_retrieval_text
+from vibescents.enrich import (
+    GroqEnrichmentClient,
+    enrich_dataframe,
+    build_retrieval_text,
+)
 
-CSV_IN  = ROOT / "data" / "vibescent_enriched.csv"
-CSV_OUT = ROOT / "data" / "vibescent_enriched.csv"   # overwrite in-place
-CKPT    = ROOT / "data" / "vibescent_enriched.csv.ckpt"
-FAILS   = ROOT / "data" / "enrichment_failures.jsonl"
+CSV_IN = ROOT / "data" / "vibescent_enriched.csv"
+CSV_OUT = ROOT / "data" / "vibescent_enriched.csv"  # overwrite in-place
+CKPT = ROOT / "data" / "vibescent_enriched.csv.ckpt"
+FAILS = ROOT / "data" / "enrichment_failures.jsonl"
 
 # Batch size 1 — Groq is sequential, rate limiter handles pacing
 BATCH_SIZE = 1

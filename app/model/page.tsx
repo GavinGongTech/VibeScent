@@ -100,8 +100,8 @@ export default function ModelPage() {
               <p className="font-sans text-muted leading-relaxed text-lg font-light">
                 The model executes a similarity search using cosine similarity
                 to identify fragrances with similar vibes. The top-p fragrances
-                closest to the user&apos;s desired aesthetic are recommended to the
-                user.
+                closest to the user&apos;s desired aesthetic are recommended to
+                the user.
               </p>
             </div>
           </div>

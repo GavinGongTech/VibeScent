@@ -12,10 +12,10 @@ from transformers import CLIPModel
 #   or "streetwear" that are hard to learn from pixels alone.
 # Together they complement each other: local detail + global semantics.
 
-CNN_DIM   = 2048
-CLIP_DIM  = 768
-FUSED_DIM = CNN_DIM + CLIP_DIM   # 2816
-MLP_DIM   = 512
+CNN_DIM = 2048
+CLIP_DIM = 768
+FUSED_DIM = CNN_DIM + CLIP_DIM  # 2816
+MLP_DIM = 512
 
 CLIP_MODEL_NAME = "openai/clip-vit-large-patch14"
 
@@ -28,7 +28,9 @@ class CNNCLIPHybrid(nn.Module):
 
         # ── CNN branch ────────────────────────────────────────────────────────
         resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
-        self.cnn_backbone = nn.Sequential(*list(resnet.children())[:-1])  # (B, 2048, 1, 1)
+        self.cnn_backbone = nn.Sequential(
+            *list(resnet.children())[:-1]
+        )  # (B, 2048, 1, 1)
 
         for name, param in resnet.named_parameters():
             if not name.startswith("layer4"):
@@ -36,8 +38,8 @@ class CNNCLIPHybrid(nn.Module):
 
         # ── CLIP branch ───────────────────────────────────────────────────────
         clip = CLIPModel.from_pretrained(CLIP_MODEL_NAME)
-        self.clip_vision  = clip.vision_model         # pooler_output: (B, 1024)
-        self.clip_proj    = clip.visual_projection    # 1024 → 768
+        self.clip_vision = clip.vision_model  # pooler_output: (B, 1024)
+        self.clip_proj = clip.visual_projection  # 1024 → 768
 
         for param in self.clip_vision.parameters():
             param.requires_grad = False
@@ -55,26 +57,24 @@ class CNNCLIPHybrid(nn.Module):
         )
 
         # ── Task heads ────────────────────────────────────────────────────────
-        self.formal_head    = nn.Linear(MLP_DIM, 3)
-        self.season_head    = nn.Linear(MLP_DIM, 4)
-        self.gender_head    = nn.Linear(MLP_DIM, 3)
-        self.time_head      = nn.Linear(MLP_DIM, 2)
+        self.formal_head = nn.Linear(MLP_DIM, 3)
+        self.season_head = nn.Linear(MLP_DIM, 4)
+        self.gender_head = nn.Linear(MLP_DIM, 3)
+        self.time_head = nn.Linear(MLP_DIM, 2)
         self.frequency_head = nn.Linear(MLP_DIM, 2)
 
         # Loss functions
         cw = class_weights or {}
-        self._ce_formal    = nn.CrossEntropyLoss(weight=cw.get("formal"))
-        self._ce_season    = nn.CrossEntropyLoss(weight=cw.get("season"))
-        self._ce_gender    = nn.CrossEntropyLoss(weight=cw.get("gender"))
-        self._ce_time      = nn.CrossEntropyLoss(weight=cw.get("time"))
+        self._ce_formal = nn.CrossEntropyLoss(weight=cw.get("formal"))
+        self._ce_season = nn.CrossEntropyLoss(weight=cw.get("season"))
+        self._ce_gender = nn.CrossEntropyLoss(weight=cw.get("gender"))
+        self._ce_time = nn.CrossEntropyLoss(weight=cw.get("time"))
         self._ce_frequency = nn.CrossEntropyLoss(weight=cw.get("frequency"))
 
     def get_embedding(self, x: torch.Tensor) -> torch.Tensor:
         """Return 512-d fused embedding. (B, 512)"""
         cnn_feats = self.cnn_backbone(x).flatten(1)
-        clip_feats = self.clip_proj(
-            self.clip_vision(pixel_values=x).pooler_output
-        )
+        clip_feats = self.clip_proj(self.clip_vision(pixel_values=x).pooler_output)
         return self.fusion(torch.cat([cnn_feats, clip_feats], dim=1))
 
     def forward(self, x: torch.Tensor) -> dict:
@@ -94,11 +94,11 @@ class CNNCLIPHybrid(nn.Module):
         fused = self.fusion(torch.cat([cnn_feats, clip_feats], dim=1))
 
         return {
-            "formal":    self.formal_head(fused),               # (B, 3)
-            "season":    self.season_head(fused),               # (B, 4)
-            "gender":    self.gender_head(fused),               # (B, 3)
-            "time":      self.time_head(fused),                 # (B, 2)
-            "frequency": self.frequency_head(fused),            # (B, 2)
+            "formal": self.formal_head(fused),  # (B, 3)
+            "season": self.season_head(fused),  # (B, 4)
+            "gender": self.gender_head(fused),  # (B, 3)
+            "time": self.time_head(fused),  # (B, 2)
+            "frequency": self.frequency_head(fused),  # (B, 2)
         }
 
     def get_loss(self, output: dict, labels: dict) -> dict:
@@ -113,19 +113,21 @@ class CNNCLIPHybrid(nn.Module):
         Returns:
             dict with total_loss and individual loss values
         """
-        formal_loss    = self._ce_formal(output["formal"],      labels["formal"])
-        season_loss    = self._ce_season(output["season"],       labels["season"])
-        gender_loss    = self._ce_gender(output["gender"],       labels["gender"])
-        time_loss      = self._ce_time(output["time"],           labels["time"])
+        formal_loss = self._ce_formal(output["formal"], labels["formal"])
+        season_loss = self._ce_season(output["season"], labels["season"])
+        gender_loss = self._ce_gender(output["gender"], labels["gender"])
+        time_loss = self._ce_time(output["time"], labels["time"])
         frequency_loss = self._ce_frequency(output["frequency"], labels["frequency"])
 
-        total_loss = formal_loss + season_loss + gender_loss + time_loss + frequency_loss
+        total_loss = (
+            formal_loss + season_loss + gender_loss + time_loss + frequency_loss
+        )
 
         return {
-            "total_loss":     total_loss,
-            "formal_loss":    formal_loss,
-            "season_loss":    season_loss,
-            "gender_loss":    gender_loss,
-            "time_loss":      time_loss,
+            "total_loss": total_loss,
+            "formal_loss": formal_loss,
+            "season_loss": season_loss,
+            "gender_loss": gender_loss,
+            "time_loss": time_loss,
             "frequency_loss": frequency_loss,
         }

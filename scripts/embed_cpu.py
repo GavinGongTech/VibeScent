@@ -7,6 +7,7 @@ to pick up the richer retrieval_text.
 Usage:
     uv run python -m scripts.embed_cpu
 """
+
 from __future__ import annotations
 
 import json
@@ -22,7 +23,7 @@ import pandas as pd
 from vibescents.embeddings import SentenceTransformerEmbedder
 from vibescents.enrich import build_retrieval_text
 
-CSV_IN  = ROOT / "data" / "vibescent_enriched.csv"
+CSV_IN = ROOT / "data" / "vibescent_enriched.csv"
 OUT_DIR = ROOT / "artifacts" / "qwen3vl_corpus"
 EMB_OUT = OUT_DIR / "embeddings.npy"
 MAN_OUT = OUT_DIR / "manifest.json"

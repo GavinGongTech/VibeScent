@@ -3,7 +3,8 @@ import type { RecommendRequest, RecommendResponse } from "@/lib/types";
 
 const DEFAULT_BUDGET_USD = 500.0;
 const ML_BACKEND_URL = process.env.ML_BACKEND_URL ?? "http://127.0.0.1:8000";
-const SCRAPER_BACKEND_URL = process.env.SCRAPER_BACKEND_URL ?? "http://127.0.0.1:8001";
+const SCRAPER_BACKEND_URL =
+  process.env.SCRAPER_BACKEND_URL ?? "http://127.0.0.1:8001";
 
 function contextToDescription(ctx: RecommendRequest["context"]): string {
   return [ctx.eventType, ctx.timeOfDay, ctx.mood].filter(Boolean).join(", ");
@@ -38,9 +39,11 @@ export async function POST(req: NextRequest) {
       console.error(`ML Backend Error (${mlResponse.status}):`, errorText);
       throw new Error(`ML backend returned ${mlResponse.status}: ${errorText}`);
     }
-    
+
     const mlResult = (await mlResponse.json()) as RecommendResponse;
-    console.log(`ML Backend returned ${mlResult.recommendations?.length || 0} recommendations.`);
+    console.log(
+      `ML Backend returned ${mlResult.recommendations?.length || 0} recommendations.`,
+    );
 
     // Extract the names of the top perfumes
     const perfumeNames = mlResult.recommendations.map(
@@ -51,7 +54,9 @@ export async function POST(req: NextRequest) {
     const budgetCap = body.budget && body.budget > 0 ? body.budget : 150.0;
 
     // 2. Call the Scraper API
-    console.log(`Calling Scraper API at ${SCRAPER_BACKEND_URL}/search with budget $${budgetCap}...`);
+    console.log(
+      `Calling Scraper API at ${SCRAPER_BACKEND_URL}/search with budget $${budgetCap}...`,
+    );
     const scraperResponse = await fetch(`${SCRAPER_BACKEND_URL}/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -63,13 +68,17 @@ export async function POST(req: NextRequest) {
 
     if (!scraperResponse.ok) {
       const scraperErrorText = await scraperResponse.text();
-      console.warn(`Scraper failed (${scraperResponse.status}): ${scraperErrorText}`);
+      console.warn(
+        `Scraper failed (${scraperResponse.status}): ${scraperErrorText}`,
+      );
       console.warn("Returning ML results without pricing.");
       return NextResponse.json(mlResult);
     }
 
     const scraperResult = await scraperResponse.json();
-    console.log(`Scraper returned data for ${scraperResult?.length || 0} items.`);
+    console.log(
+      `Scraper returned data for ${scraperResult?.length || 0} items.`,
+    );
 
     // 3. Merge scraper pricing data into ML results
     const finalRecommendations = mlResult.recommendations.map((frag, index) => {
@@ -92,7 +101,10 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("API Route Error:", error);
     return NextResponse.json(
-      { error: "Model backend unavailable or encountered an error. Please ensure the ML server is running and check the logs." },
+      {
+        error:
+          "Model backend unavailable or encountered an error. Please ensure the ML server is running and check the logs.",
+      },
       { status: 503 },
     );
   }

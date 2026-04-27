@@ -9,7 +9,14 @@ interface ContextFormProps {
   onBudgetChange: (budget: number) => void;
 }
 
-const EVENT_TYPES = ["Gala", "Date Night", "Casual", "Business", "Wedding", "Festival"];
+const EVENT_TYPES = [
+  "Gala",
+  "Date Night",
+  "Casual",
+  "Business",
+  "Wedding",
+  "Festival",
+];
 const TIMES_OF_DAY = ["Morning", "Afternoon", "Evening", "Night"];
 const MOODS = ["Bold", "Subtle", "Fresh", "Warm", "Mysterious"];
 
@@ -53,7 +60,12 @@ function PillGroup({
   );
 }
 
-export default function ContextForm({ value, onChange, budget, onBudgetChange }: ContextFormProps) {
+export default function ContextForm({
+  value,
+  onChange,
+  budget,
+  onBudgetChange,
+}: ContextFormProps) {
   return (
     <div className="w-full flex flex-col gap-8">
       <PillGroup

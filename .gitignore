@@ -47,6 +47,18 @@ train/
 node_modules/
 .next/
 vibescent.zip
+tsconfig.tsbuildinfo
+
+# === Windows WSL alternate data streams ===
+*:Zone.Identifier
+
+# === Week2 intermediate artifacts ===
+artifacts/week2_outputs/
+artifacts/week2_precomputed/**/*.npy
+artifacts/week2_precomputed/**/*.json
+
+# === Legacy model binaries ===
+models/*.pkl
 
 # === Generated / tooling ===
 graphify-out/
