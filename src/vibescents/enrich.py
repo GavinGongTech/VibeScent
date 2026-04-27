@@ -143,16 +143,36 @@ class VLLMNativeEnrichmentClient:
         except Exception:
             pass
 
-        # Auto-detect GPU VRAM and tune accordingly
+        # Detect GPU VRAM via nvidia-smi — does NOT initialize CUDA, so vLLM can
+        # keep fork mode. Calling any torch.cuda.* here would force vLLM into spawn
+        # mode (CUDA already initialized), which hangs in Jupyter due to the
+        # ipykernel stdout patch not being inherited by spawned subprocesses.
+        import subprocess as _sp
+
+        _vram_gb = 0.0
+        try:
+            _smi_out = _sp.run(
+                ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip()
+            if _smi_out:
+                _vram_gb = int(_smi_out.split("\n")[0].strip()) / 1024.0
+        except Exception:
+            pass
+
         if self.gpu_memory_utilization == 0.0:
-            try:
-                _vram_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
-                self.gpu_memory_utilization = 0.90 if _vram_gb >= 70 else 0.85
-                print(
-                    f"GPU VRAM: {_vram_gb:.0f} GB → gpu_memory_utilization={self.gpu_memory_utilization}"
-                )
-            except Exception:
+            if _vram_gb >= 90:       # Blackwell 6000 / H100
+                self.gpu_memory_utilization = 0.92
+            elif _vram_gb >= 70:     # A100 80 GB
+                self.gpu_memory_utilization = 0.90
+            else:                    # T4 and smaller
                 self.gpu_memory_utilization = 0.85
+
+        _max_num_seqs = 512 if _vram_gb >= 70 else 256
+        print(
+            f"GPU VRAM: {_vram_gb:.0f} GB → util={self.gpu_memory_utilization}, "
+            f"max_num_seqs={_max_num_seqs}"
+        )
 
         self._tokenizer = AutoTokenizer.from_pretrained(
             self.model_name, trust_remote_code=True
@@ -171,20 +191,32 @@ class VLLMNativeEnrichmentClient:
             trust_remote_code=True,
             max_model_len=4096,
             gpu_memory_utilization=self.gpu_memory_utilization,
+            max_num_seqs=_max_num_seqs,
         )
         try:
             self._llm = LLM(**_llm_kwargs, enable_prefix_caching=True)
         except TypeError:
             self._llm = LLM(**_llm_kwargs)
 
+    def _apply_template(self, messages: list[dict]) -> str:
+        """Apply chat template with thinking disabled to avoid wasting tokens."""
+        kwargs: dict = {"tokenize": False, "add_generation_prompt": True}
+        # Qwen3 thinking models support enable_thinking=False to skip <think> blocks.
+        # Without this, the model silently generates hundreds of think tokens before
+        # the JSON, burning ~6x more compute than needed.
+        try:
+            return self._tokenizer.apply_chat_template(
+                messages, **kwargs, enable_thinking=False
+            )
+        except TypeError:
+            return self._tokenizer.apply_chat_template(messages, **kwargs)
+
     def generate(self, prompt: str) -> EnrichmentSchemaV2:
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ]
-        full_prompt = self._tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
+        full_prompt = self._apply_template(messages)
         outputs = self._llm.generate([full_prompt], self._sampling_params)
         raw = outputs[0].outputs[0].text
         parsed = _parse_enrichment(raw)
@@ -205,11 +237,7 @@ class VLLMNativeEnrichmentClient:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": p},
             ]
-            full_prompts.append(
-                self._tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=True
-                )
-            )
+            full_prompts.append(self._apply_template(messages))
         outputs = self._llm.generate(full_prompts, self._sampling_params)
         results: list[EnrichmentSchemaV2 | None] = []
         for i, output in enumerate(outputs):
