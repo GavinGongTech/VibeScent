@@ -27,23 +27,12 @@ ENRICHMENT_COLUMNS = list(EnrichmentSchemaV2.model_fields.keys())
 SYSTEM_PROMPT = """\
 You are a fragrance expert. Given a perfume's metadata, generate structured vibe attributes.
 
-CRITICAL RULES:
-- Return ONLY the JSON object. 
-- DO NOT include internal reasoning, thinking, or preamble.
-- DO NOT use <think> tags.
-
-Schema Rules:
-- formality: 0.0 = very casual, 1.0 = black tie formal
-- fresh_warm: 0.0 = crisp/fresh, 1.0 = warm/cozy
-- day_night: 0.0 = daytime, 1.0 = evening/night
-- character_tags: 3-5 short adjectives
-- vibe_sentence: one sentence grounded in the given metadata
-- likely_occasion: one primary occasion label
-- likely_season: one of spring/summer/fall/winter/all-season
-- longevity: concise duration label (e.g., short/moderate/long)
-- projection: concise projection label (e.g., intimate/moderate/strong)
-- mood_tags: at least one mood-oriented tag
-- color_palette: at least one color descriptor
+CRITICAL: 
+- DO NOT USE <think> tags. 
+- DO NOT explain yourself. 
+- DO NOT show reasoning.
+- START your response with '{' and END with '}'.
+- Return ONLY the JSON object.
 """
 
 
@@ -109,7 +98,7 @@ class QwenOutlinesEnrichmentClient:
 @dataclass
 class VLLMNativeEnrichmentClient:
     model_name: str = QWEN_ENRICHMENT_MODEL
-    max_tokens: int = 512
+    max_tokens: int = 2048  # BUMPED: Give it room to 'think' and still output JSON
 
     def __post_init__(self) -> None:
         from vllm import LLM, SamplingParams  # lazy import — vllm may not be installed
