@@ -60,6 +60,9 @@ artifacts/week2_precomputed/**/*.json
 # === Legacy model binaries ===
 models/*.pkl
 
+# === Presentation files ===
+*.pptx
+
 # === Generated / tooling ===
 graphify-out/
 .codex

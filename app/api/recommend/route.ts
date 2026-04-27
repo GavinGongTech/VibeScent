@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { RecommendRequest, RecommendResponse } from "@/lib/types";
 
-const DEFAULT_BUDGET_USD = 500.0;
+const DEFAULT_BUDGET_USD = 150.0;
 const ML_BACKEND_URL = process.env.ML_BACKEND_URL ?? "http://127.0.0.1:8000";
 const SCRAPER_BACKEND_URL =
   process.env.SCRAPER_BACKEND_URL ?? "http://127.0.0.1:8001";
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
         mimeType: body.mimeType,
         context: body.context,
       }),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!mlResponse.ok) {
@@ -51,7 +52,8 @@ export async function POST(req: NextRequest) {
     );
 
     // Get the requested budget or fallback to 150
-    const budgetCap = body.budget && body.budget > 0 ? body.budget : 150.0;
+    const budgetCap =
+      body.budget && body.budget > 0 ? body.budget : DEFAULT_BUDGET_USD;
 
     // 2. Call the Scraper API
     console.log(
@@ -64,6 +66,7 @@ export async function POST(req: NextRequest) {
         perfumes: perfumeNames,
         budget: budgetCap,
       }),
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!scraperResponse.ok) {

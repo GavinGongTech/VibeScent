@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -32,4 +33,13 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        return cls()
+        return cls(
+            corpus_embeddings_path=os.environ.get(
+                "CORPUS_EMBEDDINGS_PATH",
+                str(DEFAULT_ARTIFACTS_DIR / "qwen3vl_corpus" / "embeddings.npy"),
+            ),
+            corpus_metadata_path=os.environ.get(
+                "CORPUS_METADATA_PATH",
+                str(PROJECT_ROOT / "data" / "vibescent_enriched.csv"),
+            ),
+        )

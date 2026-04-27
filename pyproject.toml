@@ -8,7 +8,6 @@ dependencies = [
   "fastapi>=0.135.3",
   "google-genai",
   "json-repair",
-  "matplotlib",
   "numpy",
   "pandas",
   "pillow",
@@ -24,6 +23,7 @@ dev = [
   "pytest-cov",
   "ruff",
   "httpx",
+  "matplotlib",
 ]
 gpu = [
   "torch>=2.0.0",

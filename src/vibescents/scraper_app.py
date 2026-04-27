@@ -2,7 +2,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
@@ -17,16 +17,12 @@ def healthz() -> dict[str, str]:
 
 
 class SearchRequest(BaseModel):
-    perfumes: list[str]
-    budget: float
+    perfumes: list[str] = Field(..., min_length=1, max_length=10)
+    budget: float = Field(..., gt=0, le=10_000)
 
 
 @app.post("/search")
 def search(req: SearchRequest) -> list[dict]:
-    if not req.perfumes:
-        raise HTTPException(status_code=400, detail="perfumes list must not be empty")
-    if req.budget <= 0:
-        raise HTTPException(status_code=400, detail="budget must be greater than 0")
     try:
         print(f"[scraper] Searching {len(req.perfumes)} items, budget ${req.budget}")
         raw_results = search_perfumes(req.perfumes, req.budget)
@@ -49,8 +45,8 @@ def search(req: SearchRequest) -> list[dict]:
         print(f"[scraper] Returning {len(clean_results)} results")
         return clean_results
 
-    except EnvironmentError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except EnvironmentError:
+        raise HTTPException(status_code=500, detail="Scraper configuration error")
     except Exception as e:
         print(f"[scraper] Unexpected error: {e}")
         raise HTTPException(
@@ -61,4 +57,4 @@ def search(req: SearchRequest) -> list[dict]:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("vibescents.scraper_app:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("vibescents.scraper_app:app", host="127.0.0.1", port=8001)

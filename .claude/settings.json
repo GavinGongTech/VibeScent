@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(ruff check *)",
+      "Bash(.venv/bin/ruff check *)",
+      "Bash(pip-audit *)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
