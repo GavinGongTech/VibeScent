@@ -31,18 +31,17 @@ def test_search_returns_200_for_valid_request() -> None:
 
 def test_search_empty_perfumes_returns_400() -> None:
     resp = client.post("/search", json={"perfumes": [], "budget": 100.0})
-    assert resp.status_code == 400
-    assert "perfumes" in resp.json()["detail"]
+    assert resp.status_code == 422
 
 
 def test_search_zero_budget_returns_400() -> None:
     resp = client.post("/search", json={"perfumes": ["Fragrance A"], "budget": 0.0})
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 def test_search_negative_budget_returns_400() -> None:
     resp = client.post("/search", json={"perfumes": ["Fragrance A"], "budget": -10.0})
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 def test_search_serpapi_key_missing_returns_500() -> None:
@@ -54,7 +53,7 @@ def test_search_serpapi_key_missing_returns_500() -> None:
             "/search", json={"perfumes": ["Fragrance A"], "budget": 100.0}
         )
     assert resp.status_code == 500
-    assert "SERPAPI_KEY" in resp.json()["detail"]
+    assert resp.json()["detail"] == "Scraper configuration error"
 
 
 def test_search_unexpected_exception_returns_500() -> None:

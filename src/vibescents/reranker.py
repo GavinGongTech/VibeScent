@@ -90,8 +90,17 @@ class Qwen3VLReranker:
             y = last[self._yes_id].item() if self._yes_id >= 0 else 0.0
             n = last[self._no_id].item() if self._no_id >= 0 else 0.0
             score = float(torch.softmax(torch.tensor([y, n]), dim=0)[0])
-            results.append({"fragrance_id": c.fragrance_id, "score": round(score, 4)})
-        results.sort(key=lambda x: x["score"], reverse=True)
+            results.append(
+                {
+                    "fragrance_id": c.fragrance_id,
+                    "overall_score": round(score, 4),
+                    "formality_score": round(score, 4),
+                    "season_score": round(score, 4),
+                    "freshness_score": round(score, 4),
+                    "explanation": "Pointwise match predicted by Qwen3-VL-Reranker-8B.",
+                }
+            )
+        results.sort(key=lambda x: x["overall_score"], reverse=True)
         return RerankResponse.model_validate({"results": results})
 
 

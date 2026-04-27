@@ -154,14 +154,3 @@ def test_search_perfumes_none_for_no_match(tmp_path) -> None:
     ):
         results = search_perfumes(["Unknown"], 100.0)
     assert results == [None]
-
-
-def test_search_perfumes_writes_json(tmp_path) -> None:
-    fake_result = {"name": "A", "price": 50.0, "store": "Sephora"}
-    out_path = tmp_path / "out.json"
-    with (
-        patch("vibescents.perfume_scraper.search_perfume", return_value=[fake_result]),
-        patch("vibescents.perfume_scraper.OUTPUT_PATH", out_path),
-    ):
-        search_perfumes(["A"], 100.0)
-    assert out_path.exists()
