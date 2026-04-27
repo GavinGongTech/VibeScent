@@ -113,12 +113,15 @@ class QwenOutlinesEnrichmentClient:
 @dataclass
 class VLLMNativeEnrichmentClient:
     model_name: str = QWEN_ENRICHMENT_MODEL
-    max_tokens: int = 4096  # BUMPED AGAIN: Qwen3 is very chatty
+    max_tokens: int = 4096
+    # 0.0 = auto-detect: 0.90 on ≥70 GB VRAM (A100/Blackwell), 0.85 otherwise
+    gpu_memory_utilization: float = 0.0
 
     def __post_init__(self) -> None:
         import contextlib
         import os
 
+        import torch
         from vllm import LLM, SamplingParams  # lazy import — vllm may not be installed
         from transformers import AutoTokenizer
 
@@ -140,6 +143,15 @@ class VLLMNativeEnrichmentClient:
         except Exception:
             pass
 
+        # Auto-detect GPU VRAM and tune accordingly
+        if self.gpu_memory_utilization == 0.0:
+            try:
+                _vram_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
+                self.gpu_memory_utilization = 0.90 if _vram_gb >= 70 else 0.85
+                print(f"GPU VRAM: {_vram_gb:.0f} GB → gpu_memory_utilization={self.gpu_memory_utilization}")
+            except Exception:
+                self.gpu_memory_utilization = 0.85
+
         self._tokenizer = AutoTokenizer.from_pretrained(
             self.model_name, trust_remote_code=True
         )
@@ -151,12 +163,12 @@ class VLLMNativeEnrichmentClient:
             max_tokens=self.max_tokens,
         )
 
-        print(f"Loading {self.model_name} via vLLM (V0, in-process)…")
+        print(f"Loading {self.model_name} via vLLM…")
         _llm_kwargs = dict(
             model=self.model_name,
             trust_remote_code=True,
             max_model_len=4096,
-            gpu_memory_utilization=0.85,
+            gpu_memory_utilization=self.gpu_memory_utilization,
         )
         try:
             self._llm = LLM(**_llm_kwargs, enable_prefix_caching=True)
