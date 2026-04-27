@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { RecommendRequest, RecommendResponse } from "@/lib/types";
+import { z } from "zod";
 
 const DEFAULT_BUDGET_USD = 150.0;
 const ML_BACKEND_URL = process.env.ML_BACKEND_URL ?? "http://127.0.0.1:8000";
 const SCRAPER_BACKEND_URL =
   process.env.SCRAPER_BACKEND_URL ?? "http://127.0.0.1:8001";
+
+const RequestSchema = z.object({
+  image: z.string().min(1).max(14_000_000),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  context: z.object({
+    eventType: z.string().optional(),
+    timeOfDay: z.string().optional(),
+    mood: z.string().optional(),
+  }),
+  budget: z.number().positive().max(10_000).optional(),
+});
 
 function contextToDescription(ctx: RecommendRequest["context"]): string {
   return [ctx.eventType, ctx.timeOfDay, ctx.mood].filter(Boolean).join(", ");
@@ -12,8 +24,16 @@ function contextToDescription(ctx: RecommendRequest["context"]): string {
 
 export async function POST(req: NextRequest) {
   let body: RecommendRequest;
+  const contentLength = parseInt(req.headers.get('content-length') ?? '0', 10);
+  if (contentLength > 14 * 1024 * 1024) {
+    return NextResponse.json({ error: 'Payload too large. Maximum image size is 10MB.' }, { status: 413 });
+  }
   try {
-    body = (await req.json()) as RecommendRequest;
+    const parsed = RequestSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 });
+    }
+    body = parsed.data as RecommendRequest;
     console.log(`\n--- New Recommendation Request ---`);
     console.log(`Context:`, body.context);
     console.log(`MimeType:`, body.mimeType);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import OutfitUploader from "@/components/demo/OutfitUploader";
 import ContextForm from "@/components/demo/ContextForm";
@@ -19,6 +19,7 @@ export default function DemoPage() {
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Triggered when the OutfitUploader successfully processes an image
   const handleImageReady = (base64: string, mime: string) => {
@@ -32,18 +33,25 @@ export default function DemoPage() {
   const handleSubmit = async () => {
     if (!image || !mimeType) return;
 
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+
     setLoading(true);
     setError(null);
 
     try {
-      const response = await getRecommendations({
-        image,
-        mimeType,
-        context,
-        budget,
-      });
+      const response = await getRecommendations(
+        {
+          image,
+          mimeType,
+          context,
+          budget,
+        },
+        abortRef.current.signal,
+      );
       setResults(response.recommendations);
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(
         err instanceof Error ? err.message : "An unexpected error occurred.",
       );

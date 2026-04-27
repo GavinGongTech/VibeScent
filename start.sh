@@ -4,12 +4,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
+_CLEANED_UP=0
+
 # ── Cleanup on exit ──────────────────────────────────────────────────────────
 cleanup() {
+  [ "$_CLEANED_UP" -eq 1 ] && return; _CLEANED_UP=1
   echo ""
   echo "Shutting down..."
   kill "$ML_PID" "$SCRAPER_PID" "$FRONTEND_PID" 2>/dev/null || true
   wait "$ML_PID" "$SCRAPER_PID" "$FRONTEND_PID" 2>/dev/null || true
+  sleep 3
+  kill -9 "$ML_PID" "$SCRAPER_PID" "$FRONTEND_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -20,7 +25,7 @@ uv run uvicorn "vibescents.backend_app:create_configured_app" \
   --host 0.0.0.0 \
   --port 8000 \
   --log-level info \
-  2>&1 | sed 's/^/[backend] /' &
+  2>&1 | stdbuf -oL sed 's/^/[backend] /' &
 ML_PID=$!
 
 # Wait for backend to be ready (up to 30s — corpus load takes a few seconds)
@@ -41,7 +46,7 @@ done
 echo "Starting Scraper API on http://localhost:8001 ..."
 uv run uvicorn vibescents.scraper_app:app --host 0.0.0.0 --port 8001 \
   --log-level info \
-  2>&1 | sed 's/^/[scraper] /' &
+  2>&1 | stdbuf -oL sed 's/^/[scraper] /' &
 SCRAPER_PID=$!
 
 # Wait for scraper to be ready (up to 15s)
@@ -60,7 +65,7 @@ done
 
 # ── Next.js frontend (port 3000) ─────────────────────────────────────────────
 echo "Starting frontend on http://localhost:3000 ..."
-bun run dev:web 2>&1 | sed 's/^/[frontend] /' &
+bun run dev:web 2>&1 | stdbuf -oL sed 's/^/[frontend] /' &
 FRONTEND_PID=$!
 
 # ── Ready ────────────────────────────────────────────────────────────────────
@@ -71,4 +76,19 @@ echo "  Backend  → http://localhost:8000"
 echo "  Press Ctrl+C to stop."
 echo ""
 
-wait
+# Monitor all three processes and detect crashes
+while true; do
+  if ! kill -0 "$ML_PID" 2>/dev/null; then
+    echo "ERROR: backend has exited unexpectedly"
+    exit 1
+  fi
+  if ! kill -0 "$SCRAPER_PID" 2>/dev/null; then
+    echo "ERROR: scraper has exited unexpectedly"
+    exit 1
+  fi
+  if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
+    echo "ERROR: frontend has exited unexpectedly"
+    exit 1
+  fi
+  sleep 5
+done

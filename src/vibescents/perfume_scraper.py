@@ -1,6 +1,6 @@
-import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
@@ -83,15 +83,21 @@ def search_perfume(name: str, budget: float) -> list[dict]:
 
 
 def search_perfumes(perfumes: list[str], budget: float) -> list[Optional[dict]]:
-    all_results: list[Optional[dict]] = []
+    all_results: list[Optional[dict]] = [None] * len(perfumes)
 
-    for name in perfumes:
-        matches = search_perfume(name, budget)
-        all_results.append(matches[0] if matches else None)
+    with ThreadPoolExecutor(max_workers=min(len(perfumes), 10)) as executor:
+        futures = {
+            executor.submit(search_perfume, name, budget): idx
+            for idx, name in enumerate(perfumes)
+        }
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text(json.dumps(all_results, indent=2))
-    print(f"[scraper] Results saved to {OUTPUT_PATH}")
+        for future in futures:
+            idx = futures[future]
+            try:
+                matches = future.result()
+                all_results[idx] = matches[0] if matches else None
+            except Exception:
+                all_results[idx] = None
 
     return all_results
 

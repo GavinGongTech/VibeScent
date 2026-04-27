@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -71,6 +72,8 @@ class VibeScoreEngine:
         self._settings = settings or Settings.from_env()
         self._embedder: object = None  # Qwen3VLMultimodalEmbedder, lazy-loaded; _EMBEDDER_UNAVAILABLE sentinel if no GPU
         self._clip: CLIPImageScorer | None = None
+        self._embedder_lock = threading.Lock()
+        self._clip_lock = threading.Lock()
 
     @classmethod
     def from_artifacts(
@@ -127,17 +130,22 @@ class VibeScoreEngine:
                 import os as _os
                 import tempfile as _tmf
 
-                with _tmf.NamedTemporaryFile(suffix=".jpg", delete=False) as _f:
-                    _f.write(image_bytes)
-                    _tmp = _f.name
+                _tmp = None
                 try:
+                    with _tmf.NamedTemporaryFile(suffix=".jpg", delete=False) as _f:
+                        _tmp = _f.name
+                        _f.write(image_bytes)
                     mm_emb = embedder.embed_multimodal_query(
                         text=query_str, image_path=_tmp
                     )
+                    mm_emb = normalize_rows(mm_emb.astype(np.float32))
+                    multi_scores = cosine_similarity_matrix(mm_emb, self._corpus_emb)[0]
                 finally:
-                    _os.unlink(_tmp)
-                mm_emb = normalize_rows(mm_emb.astype(np.float32))
-                multi_scores = cosine_similarity_matrix(mm_emb, self._corpus_emb)[0]
+                    if _tmp is not None:
+                        try:
+                            _os.unlink(_tmp)
+                        except OSError:
+                            pass
             except Exception as exc:
                 logger.warning("Multimodal embedding failed, skipping channel: %s", exc)
 
@@ -167,35 +175,43 @@ class VibeScoreEngine:
         if self._embedder is self._EMBEDDER_UNAVAILABLE:
             return None
         if self._embedder is None:
-            try:
-                self._embedder = Qwen3VLMultimodalEmbedder(self._settings)
-                logger.info(
-                    "Using Qwen3-VL-Embedding-8B (GPU mode, full 4-channel scoring)"
-                )
-            except Exception as exc:
-                logger.warning("Qwen3-VL unavailable (%s), trying CPU fallback...", exc)
-                try:
-                    from vibescents.embeddings import SentenceTransformerEmbedder
+            with self._embedder_lock:
+                if self._embedder is None:
+                    try:
+                        self._embedder = Qwen3VLMultimodalEmbedder(self._settings)
+                        logger.info(
+                            "Using Qwen3-VL-Embedding-8B (GPU mode, full 4-channel scoring)"
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Qwen3-VL unavailable (%s), trying CPU fallback...", exc
+                        )
+                        try:
+                            from vibescents.embeddings import (
+                                SentenceTransformerEmbedder,
+                            )
 
-                    self._embedder = SentenceTransformerEmbedder(
-                        self._settings.text_embedding_model
-                    )
-                    logger.info(
-                        "Using %s (CPU mode, multimodal channel disabled)",
-                        self._settings.text_embedding_model,
-                    )
-                except Exception as exc2:
-                    logger.warning(
-                        "CPU embedder also unavailable (%s), text channel disabled",
-                        exc2,
-                    )
-                    self._embedder = self._EMBEDDER_UNAVAILABLE
-                    return None
+                            self._embedder = SentenceTransformerEmbedder(
+                                self._settings.text_embedding_model
+                            )
+                            logger.info(
+                                "Using %s (CPU mode, multimodal channel disabled)",
+                                self._settings.text_embedding_model,
+                            )
+                        except Exception as exc2:
+                            logger.warning(
+                                "CPU embedder also unavailable (%s), text channel disabled",
+                                exc2,
+                            )
+                            self._embedder = self._EMBEDDER_UNAVAILABLE
+                            return None
         return self._embedder  # type: ignore[return-value]
 
     def _get_clip(self) -> CLIPImageScorer:
         if self._clip is None:
-            self._clip = CLIPImageScorer()
+            with self._clip_lock:
+                if self._clip is None:
+                    self._clip = CLIPImageScorer()
         return self._clip
 
     def _vectorised_image_scores(self, probs: ImageHeadProbabilities) -> np.ndarray:

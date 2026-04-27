@@ -117,7 +117,8 @@ jobs:
       - run: uv sync --extra dev
 
       - name: Python dependency audit
-        run: uv run pip-audit --format json | jq -e '.dependencies | map(.vulns) | flatten | length == 0'
+        run: |
+          uv run pip-audit --require-hashes -r <(uv export --no-hashes) || uv run pip-audit
 
 # ---------------------------------------------------------------------------
 # Required status check (gate for merge)

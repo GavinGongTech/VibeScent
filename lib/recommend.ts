@@ -2,6 +2,7 @@ import { RecommendRequest, RecommendResponse } from "./types";
 
 export async function getRecommendations(
   payload: RecommendRequest,
+  signal?: AbortSignal,
 ): Promise<RecommendResponse> {
   const response = await fetch("/api/recommend", {
     method: "POST",
@@ -9,6 +10,7 @@ export async function getRecommendations(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
+    signal,
   });
 
   if (!response.ok) {
