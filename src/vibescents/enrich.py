@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import inspect
+import importlib
 import time
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -76,6 +78,13 @@ class QwenOutlinesEnrichmentClient:
         except Exception:
             # Fallback for older versions or if batching fails
             raw_outputs = [self._generator(p) for p in full_prompts]
+        if not isinstance(raw_outputs, list):
+            if isinstance(raw_outputs, tuple):
+                raw_outputs = list(raw_outputs)
+            else:
+                raw_outputs = [raw_outputs]
+        if len(raw_outputs) != len(full_prompts):
+            raw_outputs = [self._generator(p) for p in full_prompts]
 
         results = []
         for raw in raw_outputs:
@@ -106,33 +115,22 @@ class VLLMNativeEnrichmentClient:
         )
 
         schema_json = EnrichmentSchemaV2.model_json_schema()
-        try:
-            from vllm.sampling_params import GuidedDecodingParams
-
-            self._sampling_params = SamplingParams(
-                max_tokens=self.max_tokens,
-                temperature=0.0,
-                guided_decoding=GuidedDecodingParams(json=schema_json),
-            )
-        except (ImportError, TypeError):
-            # Modern vLLM versions may not support GuidedDecodingParams directly.
-            # Fall back to unrestricted generation (sampling only) and parse the output.
-            self._sampling_params = SamplingParams(
-                max_tokens=self.max_tokens,
-                temperature=0.0,
-            )
+        self._sampling_params = _build_vllm_sampling_params(
+            SamplingParams,
+            schema_json=schema_json,
+            max_tokens=self.max_tokens,
+        )
 
         print(f"Loading {self.model_name} via vLLM native guided decoding…")
         _llm_kwargs = dict(
             model=self.model_name,
             trust_remote_code=True,
-            max_model_len=4096,       # enrichment prompts are short; 4096 >> what we need
+            max_model_len=4096,       # CRITICAL: Cap this to avoid infinite hang during memory profiling
             gpu_memory_utilization=0.85,
         )
         try:
             self._llm = LLM(**_llm_kwargs, enable_prefix_caching=True)
         except TypeError:
-            # Older vLLM versions don't have enable_prefix_caching
             self._llm = LLM(**_llm_kwargs)
 
     def generate(self, prompt: str) -> EnrichmentSchemaV2:
@@ -195,12 +193,20 @@ def _build_outlines_generator(model_name: str, schema: Any):
         import vllm
 
         print(f"Attempting to load {model_name} via vLLM...")
-        llm = vllm.LLM(model=model_name, trust_remote_code=True)
-        # Outlines >= 1.0
-        if hasattr(outlines.models, "VLLMOffline"):
+        llm = vllm.LLM(
+            model=model_name, 
+            trust_remote_code=True,
+            max_model_len=4096, # Cap to prevent hang
+            gpu_memory_utilization=0.85
+        )
+        if hasattr(outlines, "from_vllm_offline"):
+            model = outlines.from_vllm_offline(llm)
+        elif hasattr(outlines.models, "VLLMOffline"):
             model = outlines.models.VLLMOffline(llm)
-        else:
+        elif hasattr(outlines.models, "vllm"):
             model = outlines.models.vllm(model_name)
+        else:
+            raise AttributeError("No supported vLLM offline constructor found in outlines.")
     except Exception as e:
         print(f"vLLM load failed: {e}. Falling back to transformers (slower).")
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -213,7 +219,9 @@ def _build_outlines_generator(model_name: str, schema: Any):
             model_name, device_map="auto", torch_dtype="auto", trust_remote_code=True
         )
 
-        if hasattr(outlines.models, "Transformers"):
+        if hasattr(outlines, "from_transformers"):
+            model = outlines.from_transformers(hf_model, tokenizer)
+        elif hasattr(outlines.models, "Transformers"):
             model = outlines.models.Transformers(hf_model, tokenizer)
         else:
             try:
@@ -225,12 +233,155 @@ def _build_outlines_generator(model_name: str, schema: Any):
                     model_name, device="cuda", trust_remote_code=True
                 )
 
-    # Use outlines.generator.json (modern API) instead of outlines.generate.json
+    generator_api = getattr(outlines, "generator", None)
+    if generator_api is not None:
+        generator_json = getattr(generator_api, "json", None)
+        if callable(generator_json):
+            return generator_json(model, schema)
+
+    generate_api = getattr(outlines, "generate", None)
+    if generate_api is not None:
+        generate_json = getattr(generate_api, "json", None)
+        if callable(generate_json):
+            return generate_json(model, schema)
+
+    # Outlines >= 1.2 exposes a direct model call with output_type instead of
+    # outlines.generate / outlines.generator helper modules.
+    return _OutlinesStructuredAdapter(model=model, schema=schema)
+
+
+def _build_guided_decoding_params(schema_json: dict[str, Any]) -> Any | None:
+    for module_name, class_name in [
+        ("vllm.sampling_params", "GuidedDecodingParams"),
+        ("vllm.sampling_params", "GuidedDecodingConfig"),
+        ("vllm", "GuidedDecodingParams"),
+    ]:
+        try:
+            module = importlib.import_module(module_name)
+            guided_cls = getattr(module, class_name)
+        except (ImportError, AttributeError):
+            continue
+        for kwargs in (
+            {"json": schema_json},
+            {"json_schema": schema_json},
+            {"schema": schema_json},
+        ):
+            try:
+                return guided_cls(**kwargs)
+            except TypeError:
+                continue
+    return None
+
+
+def _build_vllm_sampling_params(
+    sampling_params_cls: Any,
+    *,
+    schema_json: dict[str, Any],
+    max_tokens: int,
+) -> Any:
+    base_kwargs = {"max_tokens": max_tokens, "temperature": 0.0}
+    
+    # Try the most modern vLLM approach (guided_decoding)
+    guided_decoding = _build_guided_decoding_params(schema_json)
+    if guided_decoding is not None:
+        try:
+            return sampling_params_cls(**base_kwargs, guided_decoding=guided_decoding)
+        except TypeError:
+            pass
+
+    # Try middle-aged vLLM approach (guided_json)
     try:
-        return outlines.generator.json(model, schema)
-    except AttributeError:
-        # Fallback for older outlines versions
-        return outlines.generate.json(model, schema)
+        return sampling_params_cls(**base_kwargs, guided_json=json.dumps(schema_json))
+    except TypeError:
+        pass
+
+    # Fallback to no guidance if everything else fails
+    print("[WARN] vLLM guided decoding parameters failed to initialize. Using raw sampling.")
+    return sampling_params_cls(**base_kwargs)
+
+
+def _call_with_schema(
+    fn: Any,
+    prompt: Any,
+    schema: Any,
+    *,
+    max_new_tokens: int,
+    sampling_params: Any | None,
+) -> Any:
+    attempts: list[tuple[tuple[Any, ...], dict[str, Any]]] = [
+        ((), {"output_type": schema, "max_new_tokens": max_new_tokens, "temperature": 0.0}),
+        ((schema,), {"max_new_tokens": max_new_tokens, "temperature": 0.0}),
+    ]
+    if sampling_params is not None:
+        attempts.extend(
+            [
+                ((), {"output_type": schema, "sampling_params": sampling_params}),
+                ((schema,), {"sampling_params": sampling_params}),
+            ]
+        )
+    attempts.extend(
+        [
+            ((), {"output_type": schema}),
+            ((schema,), {}),
+            ((), {}),
+        ]
+    )
+
+    last_type_error: TypeError | None = None
+    for args, kwargs in attempts:
+        try:
+            return fn(prompt, *args, **kwargs)
+        except TypeError as exc:
+            last_type_error = exc
+            continue
+    if last_type_error is not None:
+        raise last_type_error
+    raise TypeError("Unable to call outlines generator with the current API.")
+
+
+@dataclass
+class _OutlinesStructuredAdapter:
+    model: Any
+    schema: Any
+    max_new_tokens: int = 512
+
+    def __post_init__(self) -> None:
+        self._sampling_params = None
+        try:
+            from vllm import SamplingParams
+
+            self._sampling_params = SamplingParams(
+                max_tokens=self.max_new_tokens,
+                temperature=0.0,
+            )
+        except Exception:
+            self._sampling_params = None
+
+    def __call__(self, prompts: str | list[str]) -> Any:
+        if isinstance(prompts, list):
+            batch_fn = getattr(self.model, "batch", None)
+            if callable(batch_fn):
+                try:
+                    return _call_with_schema(
+                        batch_fn,
+                        prompts,
+                        self.schema,
+                        max_new_tokens=self.max_new_tokens,
+                        sampling_params=self._sampling_params,
+                    )
+                except TypeError:
+                    pass
+            return [self._call_single(prompt) for prompt in prompts]
+        return self._call_single(prompts)
+
+    def _call_single(self, prompt: str) -> Any:
+        return _call_with_schema(
+            self.model,
+            prompt,
+            self.schema,
+            max_new_tokens=self.max_new_tokens,
+            sampling_params=self._sampling_params,
+        )
 
 
 def _repair_payload(payload: Any) -> Any:

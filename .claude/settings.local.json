@@ -127,7 +127,15 @@
       "Read(///wsl.localhost/ubuntu/home/bossman/projects/**)",
       "Bash(grep -E \"\\\\.\\(md|txt\\)$\")",
       "Bash(./sync.sh *)",
-      "Bash(xargs -I{} sh -c 'test -f \"{}\" && du -sm \"{}\"')"
+      "Bash(xargs -I{} sh -c 'test -f \"{}\" && du -sm \"{}\"')",
+      "Bash(PYTHONPATH=src .venv/bin/python *)",
+      "Bash(pip3 install *)",
+      "Bash(grep -E '^\\(patch|fix|get|add|serve\\)_.*\\\\.py$')",
+      "Bash(grep '\\\\.py$')",
+      "Bash(uv pip *)",
+      "Bash(pip3 index *)",
+      "Bash(xargs ls *)",
+      "Bash(pip install *)"
     ]
   }
 }
