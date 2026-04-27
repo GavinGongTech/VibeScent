@@ -1,0 +1,9 @@
+{
+  "model": "Qwen/Qwen3-VL-Embedding-8B",
+  "created": "2026-04-27T22:28:34.007750",
+  "n_rows": 35889,
+  "dim": 4096,
+  "dtype": "float32",
+  "l2_normalized": true,
+  "source_csv": "/content/drive/MyDrive/vibescent_offline/vibescent_enriched_full.csv"
+}
