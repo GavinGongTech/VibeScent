@@ -166,12 +166,17 @@ class VLLMNativeEnrichmentClient:
             ))
         outputs = self._llm.generate(full_prompts, self._sampling_params)
         results: list[EnrichmentSchemaV2 | None] = []
-        for output in outputs:
+        for i, output in enumerate(outputs):
             raw = output.outputs[0].text
             parsed = _parse_enrichment(raw)
             if parsed is not None:
                 results.append(parsed)
                 continue
+            
+            # Debug first failure in batch
+            if i == 0:
+                print(f"\n[DEBUG] Parsing failed. Raw output start: {raw[:200]!r}")
+
             repaired = _repair_payload(raw)
             parsed = _parse_enrichment(repaired)
             if parsed is not None:
@@ -255,13 +260,17 @@ def _build_guided_decoding_params(schema_json: dict[str, Any]) -> Any | None:
         ("vllm.sampling_params", "GuidedDecodingParams"),
         ("vllm.sampling_params", "GuidedDecodingConfig"),
         ("vllm", "GuidedDecodingParams"),
+        ("vllm.entrypoints.openai.protocol", "GuidedDecodingParams"),
     ]:
         try:
             module = importlib.import_module(module_name)
             guided_cls = getattr(module, class_name)
         except (ImportError, AttributeError):
             continue
+        
+        # Try different keyword arguments for the constructor
         for kwargs in (
+            {"json": json.dumps(schema_json)},
             {"json": schema_json},
             {"json_schema": schema_json},
             {"schema": schema_json},
@@ -281,7 +290,7 @@ def _build_vllm_sampling_params(
 ) -> Any:
     base_kwargs = {"max_tokens": max_tokens, "temperature": 0.0}
     
-    # Try the most modern vLLM approach (guided_decoding)
+    # 1. Try modern vLLM approach (GuidedDecodingParams object)
     guided_decoding = _build_guided_decoding_params(schema_json)
     if guided_decoding is not None:
         try:
@@ -289,14 +298,19 @@ def _build_vllm_sampling_params(
         except TypeError:
             pass
 
-    # Try middle-aged vLLM approach (guided_json)
-    try:
-        return sampling_params_cls(**base_kwargs, guided_json=json.dumps(schema_json))
-    except TypeError:
-        pass
+    # 2. Try older vLLM approach (direct keywords in SamplingParams)
+    for key in ["guided_json", "json", "guided_decoding_json"]:
+        try:
+            # Try both dict and stringified JSON
+            for val in [schema_json, json.dumps(schema_json)]:
+                try:
+                    return sampling_params_cls(**base_kwargs, **{key: val})
+                except TypeError:
+                    continue
+        except Exception:
+            continue
 
-    # Fallback to no guidance if everything else fails
-    print("[WARN] vLLM guided decoding parameters failed to initialize. Using raw sampling.")
+    print("[WARN] vLLM guided decoding parameters failed to initialize. Falling back to unconstrained sampling.")
     return sampling_params_cls(**base_kwargs)
 
 
