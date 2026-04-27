@@ -98,7 +98,7 @@ class QwenOutlinesEnrichmentClient:
 @dataclass
 class VLLMNativeEnrichmentClient:
     model_name: str = QWEN_ENRICHMENT_MODEL
-    max_tokens: int = 2048  # BUMPED: Give it room to 'think' and still output JSON
+    max_tokens: int = 4096  # BUMPED AGAIN: Qwen3 is very chatty
 
     def __post_init__(self) -> None:
         from vllm import LLM, SamplingParams  # lazy import — vllm may not be installed
@@ -408,9 +408,9 @@ def _parse_enrichment(payload: Any) -> EnrichmentSchemaV2 | None:
             return EnrichmentSchemaV2.model_validate(payload)
         
         if isinstance(payload, str):
-            # 1. Strip reasoning blocks (e.g. <think>...</think>)
+            # 1. Strip reasoning blocks - handles both closed and unclosed (cut off) blocks
             import re
-            cleaned = re.sub(r'<think>.*?</think>', '', payload, flags=re.DOTALL).strip()
+            cleaned = re.sub(r'<think>.*?(?:</think>|$)', '', payload, flags=re.DOTALL).strip()
             
             # 2. Try direct parse
             try:
@@ -448,6 +448,8 @@ def _build_prompt(row: pd.Series) -> str:
         value = row.get(column)
         if pd.notna(value):
             parts.append(f"{label}: {value}")
+    
+    parts.append("\nReturn ONLY a valid JSON object. No thinking, no preamble.")
     return "\n".join(parts)
 
 
