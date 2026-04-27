@@ -51,6 +51,7 @@ class Qwen3VLForEmbeddingOutput(ModelOutput):
 class Qwen3VLForEmbedding(Qwen3VLPreTrainedModel):
     _checkpoint_conversion_mapping = {}
     accepts_loss_kwargs = False
+    config_class = Qwen3VLConfig
     config: Qwen3VLConfig
 
     def __init__(self, config: Qwen3VLConfig) -> None:
