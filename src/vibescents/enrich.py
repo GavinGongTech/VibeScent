@@ -225,7 +225,12 @@ def _build_outlines_generator(model_name: str, schema: Any):
                     model_name, device="cuda", trust_remote_code=True
                 )
 
-    return outlines.generate.json(model, schema)
+    # Use outlines.generator.json (modern API) instead of outlines.generate.json
+    try:
+        return outlines.generator.json(model, schema)
+    except AttributeError:
+        # Fallback for older outlines versions
+        return outlines.generate.json(model, schema)
 
 
 def _repair_payload(payload: Any) -> Any:
