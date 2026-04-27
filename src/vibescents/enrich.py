@@ -25,14 +25,29 @@ DELAY_BETWEEN_BATCHES = 1.0
 ENRICHMENT_COLUMNS = list(EnrichmentSchemaV2.model_fields.keys())
 
 SYSTEM_PROMPT = """\
-You are a fragrance expert. Given a perfume's metadata, generate structured vibe attributes.
+You are a fragrance expert. Given a perfume's metadata, return a JSON object with EXACTLY these fields:
 
-CRITICAL: 
-- DO NOT USE <think> tags. 
-- DO NOT explain yourself. 
-- DO NOT show reasoning.
-- START your response with '{' and END with '}'.
-- Return ONLY the JSON object.
+{
+  "likely_season": "<one of: spring | summer | fall | winter | all-season>",
+  "likely_occasion": "<short phrase, e.g. 'Evening gala' or 'Casual weekend'>",
+  "formality": <float 0.0-1.0, where 0=casual, 1=black-tie>,
+  "fresh_warm": <float 0.0-1.0, where 0=fresh/aquatic/citrus, 1=warm/oriental/musky>,
+  "day_night": <float 0.0-1.0, where 0=daytime, 1=nighttime>,
+  "gender": "<one of: male | female | neutral>",
+  "frequency": "<one of: occasional | everyday>",
+  "character_tags": ["<tag1>", "<tag2>", "<tag3>"],
+  "vibe_sentence": "<one evocative sentence describing the overall vibe>",
+  "longevity": "<short phrase, e.g. 'Long-lasting, 8+ hours' or 'Moderate, 4-6 hours'>",
+  "projection": "<short phrase, e.g. 'Moderate sillage' or 'Intimate, skin-close'>",
+  "mood_tags": ["<mood1>", "<mood2>"],
+  "color_palette": ["<color1>", "<color2>"]
+}
+
+CRITICAL:
+- Use ONLY the 13 field names shown above — no extra fields, no renamed fields
+- character_tags must have 3–5 items; mood_tags and color_palette must have at least 1
+- Do NOT use <think> tags or any chain-of-thought reasoning
+- Start your response with '{' and end with '}' — no preamble, no explanation
 """
 
 
@@ -106,11 +121,6 @@ class VLLMNativeEnrichmentClient:
 
         from vllm import LLM, SamplingParams  # lazy import — vllm may not be installed
         from transformers import AutoTokenizer
-
-        # V1 engine spawns an EngineCore subprocess that re-imports ipykernel and gets
-        # a stdout that doesn't support fileno(). V0 runs entirely in-process for a
-        # single GPU — no subprocess, no fileno() issue. Must be set before LLM().
-        os.environ["VLLM_USE_V1"] = "0"
 
         # suppress_stdout in vllm.distributed.parallel_state calls sys.stdout.fileno(),
         # which fails in any Jupyter context. Patch it to a no-op — it only suppresses
@@ -363,7 +373,33 @@ def _build_outlines_generator(model_name: str, schema: Any):
     return _OutlinesStructuredAdapter(model=model, schema=schema)
 
 
+def _flatten_schema(schema_json: dict[str, Any]) -> dict[str, Any]:
+    """Inline $defs/$ref so vLLM's guided-decoding backends receive a flat schema.
+
+    Pydantic emits $ref pointers for Literal types; xgrammar and some outlines
+    versions reject schemas that contain unresolved references.
+    """
+    defs = schema_json.get("$defs", {})
+    if not defs:
+        return schema_json
+
+    def _resolve(node: Any) -> Any:
+        if isinstance(node, dict):
+            if "$ref" in node:
+                ref_name = node["$ref"].split("/")[-1]
+                return _resolve(defs.get(ref_name, node))
+            return {k: _resolve(v) for k, v in node.items() if k != "$defs"}
+        if isinstance(node, list):
+            return [_resolve(item) for item in node]
+        return node
+
+    return _resolve(schema_json)
+
+
 def _build_guided_decoding_params(schema_json: dict[str, Any]) -> Any | None:
+    flat = _flatten_schema(schema_json)
+    _last_err: list[str] = []
+
     for module_name, class_name in [
         ("vllm.sampling_params", "GuidedDecodingParams"),
         ("vllm.sampling_params", "GuidedDecodingConfig"),
@@ -375,18 +411,21 @@ def _build_guided_decoding_params(schema_json: dict[str, Any]) -> Any | None:
             guided_cls = getattr(module, class_name)
         except (ImportError, AttributeError):
             continue
-        
-        # Try different keyword arguments for the constructor
+
         for kwargs in (
-            {"json": json.dumps(schema_json)},
-            {"json": schema_json},
-            {"json_schema": schema_json},
-            {"schema": schema_json},
+            {"json": json.dumps(flat)},
+            {"json": flat},
+            {"json_schema": flat},
+            {"schema": flat},
         ):
             try:
                 return guided_cls(**kwargs)
-            except Exception:
+            except Exception as exc:
+                _last_err.append(f"{class_name}({list(kwargs)}): {exc}")
                 continue
+
+    if _last_err:
+        print(f"[DEBUG] GuidedDecodingParams attempts failed: {_last_err[-1]}")
     return None
 
 
@@ -397,28 +436,24 @@ def _build_vllm_sampling_params(
     max_tokens: int,
 ) -> Any:
     base_kwargs = {"max_tokens": max_tokens, "temperature": 0.0}
-    
+
     # 1. Try modern vLLM approach (GuidedDecodingParams object)
     guided_decoding = _build_guided_decoding_params(schema_json)
     if guided_decoding is not None:
         try:
             return sampling_params_cls(**base_kwargs, guided_decoding=guided_decoding)
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[DEBUG] SamplingParams(guided_decoding=...) failed: {exc}")
 
     # 2. Try older vLLM approach (direct keywords in SamplingParams)
     for key in ["guided_json", "json", "guided_decoding_json"]:
-        try:
-            # Try both dict and stringified JSON
-            for val in [schema_json, json.dumps(schema_json)]:
-                try:
-                    return sampling_params_cls(**base_kwargs, **{key: val})
-                except Exception:
-                    continue
-        except Exception:
-            continue
+        for val in [schema_json, json.dumps(schema_json)]:
+            try:
+                return sampling_params_cls(**base_kwargs, **{key: val})
+            except Exception:
+                continue
 
-    print("[WARN] vLLM guided decoding parameters failed to initialize. Falling back to unconstrained sampling.")
+    print("[WARN] vLLM guided decoding unavailable — using prompt-based schema enforcement instead.")
     return sampling_params_cls(**base_kwargs)
 
 
@@ -563,7 +598,12 @@ def _build_prompt(row: pd.Series) -> str:
         if pd.notna(value):
             parts.append(f"{label}: {value}")
     
-    parts.append("\nReturn ONLY a valid JSON object. No thinking, no preamble.")
+    parts.append(
+        "\nReturn ONLY a JSON object with these exact field names: "
+        "likely_season, likely_occasion, formality, fresh_warm, day_night, "
+        "gender, frequency, character_tags, vibe_sentence, longevity, projection, "
+        "mood_tags, color_palette. No other fields. No thinking tags."
+    )
     return "\n".join(parts)
 
 
