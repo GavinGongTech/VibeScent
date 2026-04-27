@@ -101,8 +101,34 @@ class VLLMNativeEnrichmentClient:
     max_tokens: int = 4096  # BUMPED AGAIN: Qwen3 is very chatty
 
     def __post_init__(self) -> None:
+        import contextlib
+        import os
+
         from vllm import LLM, SamplingParams  # lazy import — vllm may not be installed
         from transformers import AutoTokenizer
+
+        # V1 engine spawns an EngineCore subprocess that re-imports ipykernel and gets
+        # a stdout that doesn't support fileno(). V0 runs entirely in-process for a
+        # single GPU — no subprocess, no fileno() issue. Must be set before LLM().
+        os.environ["VLLM_USE_V1"] = "0"
+
+        # suppress_stdout in vllm.distributed.parallel_state calls sys.stdout.fileno(),
+        # which fails in any Jupyter context. Patch it to a no-op — it only suppresses
+        # cosmetic NCCL output, so silencing the suppressor is safe.
+        @contextlib.contextmanager
+        def _noop_suppress():
+            yield
+
+        try:
+            import vllm.utils.system_utils as _vsu
+            _vsu.suppress_stdout = _noop_suppress
+        except Exception:
+            pass
+        try:
+            import vllm.distributed.parallel_state as _vps
+            _vps.suppress_stdout = _noop_suppress
+        except Exception:
+            pass
 
         self._tokenizer = AutoTokenizer.from_pretrained(
             self.model_name, trust_remote_code=True
@@ -115,11 +141,11 @@ class VLLMNativeEnrichmentClient:
             max_tokens=self.max_tokens,
         )
 
-        print(f"Loading {self.model_name} via vLLM native guided decoding…")
+        print(f"Loading {self.model_name} via vLLM (V0, in-process)…")
         _llm_kwargs = dict(
             model=self.model_name,
             trust_remote_code=True,
-            max_model_len=4096,       # CRITICAL: Cap this to avoid infinite hang during memory profiling
+            max_model_len=4096,
             gpu_memory_utilization=0.85,
         )
         try:
@@ -177,6 +203,94 @@ class VLLMNativeEnrichmentClient:
                 results.append(parsed)
                 continue
             results.append(None)
+        return results
+
+
+@dataclass
+class GroqEnrichmentClient:
+    """Free-tier Groq API client using Llama-3.1-8B with JSON schema structured output.
+
+    Sign up at https://console.groq.com — no credit card required.
+    Set GROQ_API_KEY environment variable before use.
+    Free tier: ~6000 TPM → ~14 rows/min → 35k corpus in ~42 hours unattended.
+    """
+
+    model_name: str = "llama-3.1-8b-instant"
+    requests_per_minute: int = 14
+    max_retries: int = 6
+
+    def __post_init__(self) -> None:
+        import os
+
+        self._api_key = os.environ.get("GROQ_API_KEY", "")
+        if not self._api_key:
+            raise EnvironmentError(
+                "GROQ_API_KEY not set. Sign up free at https://console.groq.com, "
+                "create an API key, then: export GROQ_API_KEY=your_key"
+            )
+        self._schema = EnrichmentSchemaV2.model_json_schema()
+        self._min_interval = 60.0 / self.requests_per_minute
+        self._last_request_time: float = 0.0
+
+    def _call(self, prompt: str) -> str:
+        import requests as _req
+        import time
+
+        elapsed = time.time() - self._last_request_time
+        if elapsed < self._min_interval:
+            time.sleep(self._min_interval - elapsed)
+
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "EnrichmentSchemaV2", "schema": self._schema, "strict": True},
+            },
+            "temperature": 0,
+            "max_tokens": 1024,
+        }
+
+        backoff = 30
+        for attempt in range(self.max_retries):
+            resp = _req.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=30,
+            )
+            self._last_request_time = time.time()
+            if resp.status_code == 429:
+                print(f"[Groq] Rate limited — waiting {backoff}s (attempt {attempt + 1})")
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 300)
+                continue
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+
+        raise RuntimeError(f"Groq API failed after {self.max_retries} retries")
+
+    def generate(self, prompt: str) -> EnrichmentSchemaV2:
+        raw = self._call(prompt)
+        parsed = _parse_enrichment(raw)
+        if parsed is not None:
+            return parsed
+        repaired = _repair_payload(raw)
+        parsed = _parse_enrichment(repaired)
+        if parsed is not None:
+            return parsed
+        raise ValueError(f"Groq output unparseable: {raw[:200]}")
+
+    def generate_batch(self, prompts: list[str]) -> list[EnrichmentSchemaV2 | None]:
+        results: list[EnrichmentSchemaV2 | None] = []
+        for prompt in prompts:
+            try:
+                results.append(self.generate(prompt))
+            except Exception:
+                results.append(None)
         return results
 
 
@@ -271,7 +385,7 @@ def _build_guided_decoding_params(schema_json: dict[str, Any]) -> Any | None:
         ):
             try:
                 return guided_cls(**kwargs)
-            except TypeError:
+            except Exception:
                 continue
     return None
 
@@ -289,7 +403,7 @@ def _build_vllm_sampling_params(
     if guided_decoding is not None:
         try:
             return sampling_params_cls(**base_kwargs, guided_decoding=guided_decoding)
-        except TypeError:
+        except Exception:
             pass
 
     # 2. Try older vLLM approach (direct keywords in SamplingParams)
@@ -299,7 +413,7 @@ def _build_vllm_sampling_params(
             for val in [schema_json, json.dumps(schema_json)]:
                 try:
                     return sampling_params_cls(**base_kwargs, **{key: val})
-                except TypeError:
+                except Exception:
                     continue
         except Exception:
             continue
@@ -483,13 +597,26 @@ def _append_failure_record(
 
 
 def _resolve_client(*, model_name: str | None) -> EnrichmentClient:
-    return QwenOutlinesEnrichmentClient(model_name=model_name or LOCAL_ENRICHMENT_MODEL)
+    effective = model_name or LOCAL_ENRICHMENT_MODEL
+    # 1. GPU: vLLM native guided decoding (fastest)
+    try:
+        return VLLMNativeEnrichmentClient(model_name=effective)
+    except Exception:
+        pass
+    # 2. Free API: Groq (CPU-friendly, ~42h for 35k rows, GROQ_API_KEY required)
+    try:
+        return GroqEnrichmentClient()
+    except EnvironmentError:
+        pass
+    # 3. Local CPU fallback: Outlines + transformers (slow)
+    return QwenOutlinesEnrichmentClient(model_name=effective)
 
 
 def enrich_dataframe(
     df: pd.DataFrame,
     *,
     model_name: str | None = None,
+    client: EnrichmentClient | None = None,
     provider: str = "local",  # kept for backward-compat, always uses local LLM
     max_rows: int | None = None,
     resume_from: int = 0,
@@ -498,7 +625,7 @@ def enrich_dataframe(
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> pd.DataFrame:
     """Enrich dataframe rows with EnrichmentSchemaV2 fields."""
-    client = _resolve_client(model_name=model_name)
+    client = client or _resolve_client(model_name=model_name)
 
     work = df.copy()
     for column in ENRICHMENT_COLUMNS:
