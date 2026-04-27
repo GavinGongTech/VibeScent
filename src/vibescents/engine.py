@@ -169,13 +169,28 @@ class VibeScoreEngine:
         if self._embedder is None:
             try:
                 self._embedder = Qwen3VLMultimodalEmbedder(self._settings)
-            except Exception as exc:
-                logger.warning(
-                    "Qwen3-VL embedder unavailable (no GPU?), text/multimodal channels disabled: %s",
-                    exc,
+                logger.info(
+                    "Using Qwen3-VL-Embedding-8B (GPU mode, full 4-channel scoring)"
                 )
-                self._embedder = self._EMBEDDER_UNAVAILABLE
-                return None
+            except Exception as exc:
+                logger.warning("Qwen3-VL unavailable (%s), trying CPU fallback...", exc)
+                try:
+                    from vibescents.embeddings import SentenceTransformerEmbedder
+
+                    self._embedder = SentenceTransformerEmbedder(
+                        self._settings.text_embedding_model
+                    )
+                    logger.info(
+                        "Using %s (CPU mode, multimodal channel disabled)",
+                        self._settings.text_embedding_model,
+                    )
+                except Exception as exc2:
+                    logger.warning(
+                        "CPU embedder also unavailable (%s), text channel disabled",
+                        exc2,
+                    )
+                    self._embedder = self._EMBEDDER_UNAVAILABLE
+                    return None
         return self._embedder  # type: ignore[return-value]
 
     def _get_clip(self) -> CLIPImageScorer:
@@ -191,8 +206,16 @@ class VibeScoreEngine:
         formality = pd.to_numeric(df["formality"], errors="coerce").fillna(0.5).values
         day_night = pd.to_numeric(df["day_night"], errors="coerce").fillna(0.5).values
         seasons = df["likely_season"].fillna("all-season").astype(str).values
-        genders = df["gender"].fillna("neutral").astype(str).values if "gender" in df.columns else None
-        frequencies = df["frequency"].fillna("everyday").astype(str).values if "frequency" in df.columns else None
+        genders = (
+            df["gender"].fillna("neutral").astype(str).values
+            if "gender" in df.columns
+            else None
+        )
+        frequencies = (
+            df["frequency"].fillna("everyday").astype(str).values
+            if "frequency" in df.columns
+            else None
+        )
 
         # Map each fragrance's attributes → discrete class indices
         formal_targets = np.where(formality < 0.33, 0, np.where(formality < 0.67, 1, 2))
@@ -224,7 +247,10 @@ class VibeScoreEngine:
         _default_freq = FREQUENCY_INDEX["everyday"]
         frequency_targets = (
             np.array(
-                [FREQUENCY_INDEX.get(f.strip().lower(), _default_freq) for f in frequencies],
+                [
+                    FREQUENCY_INDEX.get(f.strip().lower(), _default_freq)
+                    for f in frequencies
+                ],
                 dtype=int,
             )
             if frequencies is not None

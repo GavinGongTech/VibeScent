@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import inspect
 import importlib
 import time
 from dataclasses import dataclass
@@ -119,7 +118,6 @@ class VLLMNativeEnrichmentClient:
 
     def __post_init__(self) -> None:
         import contextlib
-        import os
 
         import torch
         from vllm import LLM, SamplingParams  # lazy import — vllm may not be installed
@@ -134,11 +132,13 @@ class VLLMNativeEnrichmentClient:
 
         try:
             import vllm.utils.system_utils as _vsu
+
             _vsu.suppress_stdout = _noop_suppress
         except Exception:
             pass
         try:
             import vllm.distributed.parallel_state as _vps
+
             _vps.suppress_stdout = _noop_suppress
         except Exception:
             pass
@@ -148,7 +148,9 @@ class VLLMNativeEnrichmentClient:
             try:
                 _vram_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
                 self.gpu_memory_utilization = 0.90 if _vram_gb >= 70 else 0.85
-                print(f"GPU VRAM: {_vram_gb:.0f} GB → gpu_memory_utilization={self.gpu_memory_utilization}")
+                print(
+                    f"GPU VRAM: {_vram_gb:.0f} GB → gpu_memory_utilization={self.gpu_memory_utilization}"
+                )
             except Exception:
                 self.gpu_memory_utilization = 0.85
 
@@ -203,9 +205,11 @@ class VLLMNativeEnrichmentClient:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": p},
             ]
-            full_prompts.append(self._tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            ))
+            full_prompts.append(
+                self._tokenizer.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True
+                )
+            )
         outputs = self._llm.generate(full_prompts, self._sampling_params)
         results: list[EnrichmentSchemaV2 | None] = []
         for i, output in enumerate(outputs):
@@ -214,7 +218,7 @@ class VLLMNativeEnrichmentClient:
             if parsed is not None:
                 results.append(parsed)
                 continue
-            
+
             # Debug first failure in batch
             if i == 0:
                 print(f"\n[DEBUG] Parsing failed. Raw output start: {raw[:200]!r}")
@@ -270,7 +274,11 @@ class GroqEnrichmentClient:
             ],
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {"name": "EnrichmentSchemaV2", "schema": self._schema, "strict": True},
+                "json_schema": {
+                    "name": "EnrichmentSchemaV2",
+                    "schema": self._schema,
+                    "strict": True,
+                },
             },
             "temperature": 0,
             "max_tokens": 1024,
@@ -280,13 +288,18 @@ class GroqEnrichmentClient:
         for attempt in range(self.max_retries):
             resp = _req.post(
                 "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
                 json=payload,
                 timeout=30,
             )
             self._last_request_time = time.time()
             if resp.status_code == 429:
-                print(f"[Groq] Rate limited — waiting {backoff}s (attempt {attempt + 1})")
+                print(
+                    f"[Groq] Rate limited — waiting {backoff}s (attempt {attempt + 1})"
+                )
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 300)
                 continue
@@ -329,10 +342,10 @@ def _build_outlines_generator(model_name: str, schema: Any):
 
         print(f"Attempting to load {model_name} via vLLM...")
         llm = vllm.LLM(
-            model=model_name, 
+            model=model_name,
             trust_remote_code=True,
-            max_model_len=4096, # Cap to prevent hang
-            gpu_memory_utilization=0.85
+            max_model_len=4096,  # Cap to prevent hang
+            gpu_memory_utilization=0.85,
         )
         if hasattr(outlines, "from_vllm_offline"):
             model = outlines.from_vllm_offline(llm)
@@ -341,7 +354,9 @@ def _build_outlines_generator(model_name: str, schema: Any):
         elif hasattr(outlines.models, "vllm"):
             model = outlines.models.vllm(model_name)
         else:
-            raise AttributeError("No supported vLLM offline constructor found in outlines.")
+            raise AttributeError(
+                "No supported vLLM offline constructor found in outlines."
+            )
     except Exception as e:
         print(f"vLLM load failed: {e}. Falling back to transformers (slower).")
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -465,7 +480,9 @@ def _build_vllm_sampling_params(
             except Exception:
                 continue
 
-    print("[WARN] vLLM guided decoding unavailable — using prompt-based schema enforcement instead.")
+    print(
+        "[WARN] vLLM guided decoding unavailable — using prompt-based schema enforcement instead."
+    )
     return sampling_params_cls(**base_kwargs)
 
 
@@ -478,7 +495,14 @@ def _call_with_schema(
     sampling_params: Any | None,
 ) -> Any:
     attempts: list[tuple[tuple[Any, ...], dict[str, Any]]] = [
-        ((), {"output_type": schema, "max_new_tokens": max_new_tokens, "temperature": 0.0}),
+        (
+            (),
+            {
+                "output_type": schema,
+                "max_new_tokens": max_new_tokens,
+                "temperature": 0.0,
+            },
+        ),
         ((schema,), {"max_new_tokens": max_new_tokens, "temperature": 0.0}),
     ]
     if sampling_params is not None:
@@ -567,28 +591,31 @@ def _parse_enrichment(payload: Any) -> EnrichmentSchemaV2 | None:
             return payload
         if isinstance(payload, dict):
             return EnrichmentSchemaV2.model_validate(payload)
-        
+
         if isinstance(payload, str):
             # 1. Strip reasoning blocks - handles both closed and unclosed (cut off) blocks
             import re
-            cleaned = re.sub(r'<think>.*?(?:</think>|$)', '', payload, flags=re.DOTALL).strip()
-            
+
+            cleaned = re.sub(
+                r"<think>.*?(?:</think>|$)", "", payload, flags=re.DOTALL
+            ).strip()
+
             # 2. Try direct parse
             try:
                 parsed = json.loads(cleaned)
                 return EnrichmentSchemaV2.model_validate(parsed)
             except json.JSONDecodeError:
                 pass
-            
+
             # 3. Extract JSON object using regex if model yapped around it
-            match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+            match = re.search(r"\{.*\}", cleaned, re.DOTALL)
             if match:
                 try:
                     parsed = json.loads(match.group(0))
                     return EnrichmentSchemaV2.model_validate(parsed)
                 except json.JSONDecodeError:
                     pass
-                    
+
         return None
     except (ValidationError, TypeError, ValueError):
         return None
@@ -609,7 +636,7 @@ def _build_prompt(row: pd.Series) -> str:
         value = row.get(column)
         if pd.notna(value):
             parts.append(f"{label}: {value}")
-    
+
     parts.append(
         "\nReturn ONLY a JSON object with these exact field names: "
         "likely_season, likely_occasion, formality, fresh_warm, day_night, "

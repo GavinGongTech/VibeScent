@@ -12,6 +12,8 @@ DEFAULT_ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 class Settings:
     # Qwen3-VL unified stack — local GPU, zero API keys required
     multimodal_embedding_model: str = "Qwen/Qwen3-VL-Embedding-8B"
+    # CPU fallback embedder (sentence-transformers, no GPU needed)
+    text_embedding_model: str = "nomic-ai/nomic-embed-text-v1.5"
     reranker_model: str = "Qwen/Qwen3-VL-Reranker-8B"
 
     # LLM enrichment — any HuggingFace instruction-tuned model works with xgrammar guided decoding

@@ -149,6 +149,8 @@ def test_vectorised_image_scores_shape() -> None:
         formal=np.array([0.3, 0.5, 0.2]),
         season=np.array([0.4, 0.3, 0.2, 0.1]),
         time=np.array([0.6, 0.4]),
+        gender=np.array([0.3, 0.4, 0.3]),
+        frequency=np.array([0.4, 0.6]),
     )
     scores = engine._vectorised_image_scores(probs)
     assert scores.shape == (10,)
@@ -178,6 +180,8 @@ def test_vectorised_image_scores_handles_empty_season() -> None:
         formal=np.array([0.3, 0.5, 0.2]),
         season=np.array([0.4, 0.3, 0.2, 0.1]),
         time=np.array([0.6, 0.4]),
+        gender=np.array([0.3, 0.4, 0.3]),
+        frequency=np.array([0.4, 0.6]),
     )
     scores = engine._vectorised_image_scores(probs)
     assert not np.any(np.isnan(scores))

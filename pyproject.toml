@@ -31,6 +31,9 @@ gpu = [
   "qwen-vl-utils>=0.0.14",
   "accelerate>=0.26.0",
 ]
+cpu = [
+  "sentence-transformers>=3.0.0",
+]
 
 [project.scripts]
 vibescents = "vibescents.cli:main"

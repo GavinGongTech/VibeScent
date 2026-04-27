@@ -44,10 +44,10 @@ _HEAD_NAMES = ("formal", "season", "time", "gender", "frequency")
 
 @dataclass(frozen=True)
 class ImageHeadProbabilities:
-    formal: np.ndarray    # [casual, smart-casual, formal]
-    season: np.ndarray    # [spring, summer, fall, winter]
-    time: np.ndarray      # [day, night]
-    gender: np.ndarray    # [male, female, neutral]
+    formal: np.ndarray  # [casual, smart-casual, formal]
+    season: np.ndarray  # [spring, summer, fall, winter]
+    time: np.ndarray  # [day, night]
+    gender: np.ndarray  # [male, female, neutral]
     frequency: np.ndarray  # [occasional, everyday]
 
     def as_dict(self) -> dict[str, np.ndarray]:
@@ -67,7 +67,9 @@ def discretize_day_night(day_night: float) -> int:
 
 
 def discretize_gender(gender: str | None) -> int:
-    return GENDER_INDEX.get((gender or "neutral").strip().lower(), GENDER_INDEX["neutral"])
+    return GENDER_INDEX.get(
+        (gender or "neutral").strip().lower(), GENDER_INDEX["neutral"]
+    )
 
 
 def discretize_frequency(frequency: str | None) -> int:
