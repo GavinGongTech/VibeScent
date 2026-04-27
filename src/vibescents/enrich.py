@@ -119,7 +119,6 @@ class VLLMNativeEnrichmentClient:
     def __post_init__(self) -> None:
         import contextlib
 
-        import torch
         from vllm import LLM, SamplingParams  # lazy import — vllm may not be installed
         from transformers import AutoTokenizer
 
@@ -152,8 +151,14 @@ class VLLMNativeEnrichmentClient:
         _vram_gb = 0.0
         try:
             _smi_out = _sp.run(
-                ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=5,
+                [
+                    "nvidia-smi",
+                    "--query-gpu=memory.total",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
             ).stdout.strip()
             if _smi_out:
                 _vram_gb = int(_smi_out.split("\n")[0].strip()) / 1024.0
@@ -161,11 +166,11 @@ class VLLMNativeEnrichmentClient:
             pass
 
         if self.gpu_memory_utilization == 0.0:
-            if _vram_gb >= 90:       # Blackwell 6000 / H100
+            if _vram_gb >= 90:  # Blackwell 6000 / H100
                 self.gpu_memory_utilization = 0.92
-            elif _vram_gb >= 70:     # A100 80 GB
+            elif _vram_gb >= 70:  # A100 80 GB
                 self.gpu_memory_utilization = 0.90
-            else:                    # T4 and smaller
+            else:  # T4 and smaller
                 self.gpu_memory_utilization = 0.85
 
         _max_num_seqs = 512 if _vram_gb >= 70 else 256
