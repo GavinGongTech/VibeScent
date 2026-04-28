@@ -99,9 +99,9 @@ bun run dev:web
 | Channel | Weight | Model | Coverage |
 |---|---|---|---|
 | Text | 0.30 | Qwen3-VL-Embedding-8B | Full corpus (36K) |
-| Multimodal | 0.25 | Qwen3-VL-Embedding-8B | Tier B only (2K enriched) |
-| Image | 0.30 | CLIP (openai/clip-vit-base-patch32) | Tier B only |
-| Structured | 0.15 | Arithmetic (no model) | Tier B only |
+| Multimodal | 0.25 | Qwen3-VL-Embedding-8B | Full corpus (36K) |
+| Image | 0.30 | CLIP ViT-L/14 | Full corpus (36K) |
+| Structured | 0.15 | Arithmetic (no model) | Full corpus (36K) |
 
 Each channel produces a per-fragrance score array. All four are min-max normalized to [0, 1] independently, then combined via weighted sum. Missing channels (e.g. no GPU for Qwen3-VL) are redistributed with pre-tuned fallback weight sets.
 

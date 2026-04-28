@@ -271,7 +271,7 @@ def _coerce_str(value: Any, name: str) -> str:
     return text
 
 
-_CLIP_MODEL = "openai/clip-vit-base-patch32"
+_CLIP_MODEL = "openai/clip-vit-large-patch14"
 
 # Prompt bank — 3 prompts per class, ordered to match ImageHeadProbabilities indices:
 # formal[0]=casual/[1]=smart-casual/[2]=formal; season[0]=spring/.../[3]=winter;

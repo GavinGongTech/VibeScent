@@ -103,7 +103,7 @@ vibe_sentence: "A luminous amber that bridges elegance and sensuality with cryst
 
 This translation works because the LLM has absorbed fragrance culture from reviews, editorial writing, and marketing copy during training. It knows that saffron + amber reads as "luxury" and "formal" in a cultural context that raw ingredient names don't encode.
 
-The output is constrained via `outlines` — a library that restricts token generation to valid JSON matching the exact schema. You cannot get a malformed or missing field. This is not optional: at 2,000 API calls, even a 1% failure rate means 20 broken fragrance embeddings.
+The output is constrained via `outlines` — a library that restricts token generation to valid JSON matching the exact schema. You cannot get a malformed or missing field. This is not optional: at 35,889 inference calls, even a 1% failure rate means ~358 broken fragrance embeddings.
 
 **Step 4 — You build a rich retrieval string for each fragrance.**
 
@@ -123,7 +123,7 @@ This string now lives in the same semantic space as how users describe occasions
 
 Qwen3-VL-Embedding-8B reads each `retrieval_text` string and outputs a 4096-dimensional vector. All 35,889 rows carry enriched fields. The vectors are L2-normalized and saved as a single unified matrix: `artifacts/qwen3vl_corpus/embeddings.npy` (shape 35,889 × 4096, float32, ~560 MB).
 
-Week 5 Reality: The pipeline uses Qwen3-VL-Embedding-8B at full 4096-d. No Matryoshka truncation or 1024-d projection is applied. The VL model's superior cross-modal alignment is leveraged at its native resolution, providing maximum semantic density for retrieval.
+Week 5 Reality: The pipeline uses Qwen3-VL-Embedding-8B at full 4096-d. No Matryoshka truncation or 4096-d projection is applied. The VL model's superior cross-modal alignment is leveraged at its native resolution, providing maximum semantic density for retrieval.
 
 **Step 6 — Unified text+multimodal corpus: one matrix for both channels.**
 
@@ -327,7 +327,7 @@ A single model (e.g., ask GPT-4V: "given this outfit and occasion, recommend thr
 
 Each signal covers a blind spot of the others:
 - Text alone: can't see the outfit, biased by vocabulary overlap
-- Multimodal alone: limited to 2K fragrances, black-box
+- Multimodal alone: reaches the full corpus, black-box
 - Image CNN alone: 9 values total, no semantic nuance
 - Structured alone (ideal): no neural understanding of similarity, only attribute arithmetic—but **fully query-aware** as it sets targets based on user context.
 
@@ -619,7 +619,7 @@ Per-head weights (`DEFAULT_HEAD_WEIGHTS = {all: 1.0}`) are configurable — sett
 **Known calibration gap:** neural network classifiers are often overconfident — they output `P=0.95` when empirical accuracy is 80%. If the CNN is overconfident, scores will cluster near 0 and 1, reducing discrimination between fragrances. Temperature scaling (`logits / T` before softmax) is the standard fix. It is not currently applied. This is a known limitation.
 
 **Why this branch is non-redundant with multimodal:**
-- Multimodal produces a continuous 1024-d embedding — interpretability is zero. You can't inspect what visual feature drove the score.
+- Multimodal produces a continuous 4096-d embedding — interpretability is zero. You can't inspect what visual feature drove the score.
 - The CNN branch is fully interpretable: you can read off `P_formal=[0.05, 0.12, 0.83]` and understand exactly what the model predicts.
 - The CNN trained specifically on outfit classification may be more precise on garment-specific visual features (cut, collar, lapel, hem) than a general vision-language model whose training is diluted across all visual domains.
 - Most importantly: the CNN connects outfit visual features to fragrance enrichment attributes via a probabilistic bridge. The multimodal branch connects outfit features to fragrance text descriptions via a semantic embedding bridge. These are different paths through different intermediate representations.
@@ -764,7 +764,7 @@ MMR (Maximal Marginal Relevance) balances relevance vs. diversity. λ=0.5 weight
 
 **Why a reranker on top of fusion:** fusion is a weighted average of independent signals. It cannot reason about whether a combination of signals makes sense together, or catch cases where one branch is confidently wrong. The Qwen3-VL-Reranker-8B sees the outfit image directly and scores candidates with holistic visual-semantic reasoning — it can flag "this is a beach outfit and BR540 is a black tie fragrance" in a way that no matrix multiply can.
 
-**Evaluation design — avoiding self-confirmation bias:** the label generator is `gemini-3.1-pro-preview` and the evaluation judge is `gemini-2.5-pro`. Using the same model as both label writer and judge causes the judge to prefer its own generation patterns, not outputs that are actually better for users.
+**Evaluation design — avoiding self-confirmation bias:** the label generator is `gemini-1.5-flash` and the evaluation judge is `gemini-1.5-pro`. Using the same model as both label writer and judge causes the judge to prefer its own generation patterns, not outputs that are actually better for users.
 
 ---
 
@@ -930,17 +930,17 @@ The scraper (`src/vibescents/perfume_scraper.py` + `scraper_app.py`) queries the
 | Corpus embedding (offline) | Qwen3-VL-Embedding-8B | Local GPU / HuggingFace | — | Generates `artifacts/qwen3vl_corpus/` (35,889 × 4096) |
 | Image zero-shot classifier | CLIP ViT-L/14 (`openai/clip-vit-large-patch14`) | Local (CPU+GPU) | — | 5 heads, 3 prompts per class, averaged before softmax |
 | Image CNN (optional) | ResNet-50 + CLIP hybrid (`NeilCNNWrapper`) | Local GPU | — | Loads Neil's checkpoint if provided; same `ImageHeadProbabilities` interface |
-| Enrichment LLM | Qwen3.5-8B | Local GPU (outlines) | — | Falls back to Gemini flash on T4 |
+| Enrichment LLM | Qwen3-8B | Local GPU (outlines) | — | Falls back to Gemini flash on T4 |
 | Enrichment fallback | gemini-flash (latest) | Google API | — | Structured output via response_schema |
 | Reranker (research only) | Qwen3-VL-Reranker-8B | Local GPU | — | Not in production path; ships if benchmark wins |
-| Evaluation judge | gemini-2.5-pro | Google API | — | Different from label generator |
-| Label generator | gemini-2.5-pro-preview | Google API | — | 3-run majority vote per benchmark case |
+| Evaluation judge | gemini-1.5-pro | Google API | — | Different from label generator |
+| Label generator | gemini-1.5-pro-preview | Google API | — | 3-run majority vote per benchmark case |
 
 ---
 
 ## Shared Schema — `EnrichmentSchemaV2`
 
-Every Tier B fragrance must have all of these fields after enrichment:
+Every fragrance must have all of these fields after enrichment:
 
 | Field | Type | Range / Values | Generated by |
 |---|---|---|---|
@@ -1002,14 +1002,14 @@ class BenchmarkCaseLabel(BaseModel):
     confidence:               float    # 0.0–1.0, ≥0.6 required
 ```
 
-**Label generation:** 3 independent runs of `gemini-3.1-pro-preview` per case. Cases kept only if there is strong agreement across runs (majority vote on all categorical fields). Confidence <0.6 → case is discarded or reworked.
+**Label generation:** 3 independent runs of `gemini-1.5-flash` per case. Cases kept only if there is strong agreement across runs (majority vote on all categorical fields). Confidence <0.6 → case is discarded or reworked.
 
 **Primary scoring (metadata-based):**
 - `attribute_match@3` / `@5`: do top-3/5 results match target formality, season, day/night, fresh/warm?
 - `neighborhood_hit@3` / `@5`: do top-3/5 results fall in an acceptable accord/note-family neighborhood?
 
 **Secondary scoring (LLM judge):**
-- Judge: `gemini-2.5-pro` — different from label generator to avoid self-confirmation bias
+- Judge: `gemini-1.5-pro` — different from label generator to avoid self-confirmation bias
 - Judge sees: outfit image, occasion text, fusion top candidates, reranker top candidates
 - Judge outputs: preferred shortlist, rationale, confidence
 
@@ -1222,9 +1222,9 @@ Neil's model uses ResNet-50 for the convolutional backbone. The reasons are prag
 
 Enrichment requires domain expertise: the model must correctly infer `formality=0.88` for BR540 vs `formality=0.22` for a beachy aquatic. This is not a task that can be solved by pattern matching on training data — it requires understanding of cultural fragrance norms, occasion dressing conventions, and sensory-to-conceptual translation.
 
-Smaller models (7-8B) tend to produce fluent but inaccurate enrichment on this task — they hallucinate plausible-sounding but wrong formality scores, and their `vibe_sentence` outputs are generic ("a pleasant fragrance for all occasions"). 27B models have enough capacity to have absorbed fragrance-specific cultural knowledge from the training corpus and can make nuanced distinctions.
+Smaller models (7-8B) tend to produce fluent but inaccurate enrichment on this task — they hallucinate plausible-sounding but wrong formality scores, and their `vibe_sentence` outputs are generic ("a pleasant fragrance for all occasions"). The Qwen3-8B model has enough capacity to have absorbed fragrance-specific cultural knowledge from the training corpus and can make nuanced distinctions.
 
-More critically: enrichment runs once offline. The GPU cost of 27B vs 8B for 2,000 rows is roughly 3× longer at inference time — acceptable for a one-time offline job. If this were running live per-request, the 8B model would be necessary.
+More critically: enrichment runs once offline. The GPU cost for 35,889 rows is acceptable for a one-time offline job. If this were running live per-request, the 8B model would be necessary.
 
 **Q: Why switch the reranker from Gemini API (Week 4) to Qwen3-VL-Reranker-8B (Week 5)?**
 
@@ -1237,13 +1237,13 @@ More critically: enrichment runs once offline. The GPU cost of 27B vs 8B for 2,0
 
 The model pair (Embedding + Reranker from the same Qwen3-VL family) is also architecturally coherent: they share the same embedding space, so the reranker can directly compare query embeddings to candidate representations without cross-model mismatch.
 
-**Q: Why use a different model (`gemini-2.5-pro`) as evaluation judge vs the label generator (`gemini-3.1-pro-preview`)?**
+**Q: Why use a different model (`gemini-1.5-pro`) as evaluation judge vs the label generator (`gemini-1.5-flash`)?**
 
 Self-confirmation bias. If the same model generates the benchmark labels and then evaluates whether the system's output matches those labels, it will systematically prefer outputs that resemble its own generation style — not outputs that are actually correct.
 
 This is a well-known problem in LLM evaluation: LLM-as-judge studies show that models prefer their own outputs 60–70% of the time even when the other output is objectively better by human standards. Using a different model family breaks this pattern and makes the evaluation more credible.
 
-Additionally, `gemini-2.5-pro` is a stronger reasoning model — it may catch errors in the labels themselves that `gemini-3.1-pro-preview` would not, because it's evaluating from a position of greater capability.
+Additionally, `gemini-1.5-pro` is a stronger reasoning model — it may catch errors in the labels themselves that `gemini-1.5-flash` would not, because it's evaluating from a position of greater capability.
 
 ---
 
@@ -1254,7 +1254,7 @@ Additionally, `gemini-2.5-pro` is a stronger reasoning model — it may catch er
 Traditional NLP would give you:
 - TF-IDF weights over note vocabulary → tells you which notes are distinctive, not what the fragrance means culturally
 - Named entity recognition → extracts brand names, note names, not occasion suitability
-- Rule-based classifiers → requires manually encoding "saffron + oud → formal" rules, which is incomplete and unmaintainable at 2,000+ fragrances
+- Rule-based classifiers → requires manually encoding "saffron + oud → formal" rules, which is incomplete and unmaintainable at 35,889 fragrances
 
 The enrichment task requires **grounded inference from cultural knowledge**: "what occasion is this fragrance appropriate for?" is not answerable from the note list alone. It requires knowing that saffron + amber has historically appeared in formal Middle Eastern and European fine fragrance traditions, that the `amberwood` accord is associated with evening luxury consumption, that MFK BR540 specifically has become a cultural shorthand for high-status urban formal occasions. This is cultural knowledge that exists in the LLM's training data and not in any rule system or statistical model trained purely on fragrance metadata.
 
@@ -1274,19 +1274,19 @@ Prompt-and-validate has a critical failure mode at scale: the LLM's output is st
 - Omit a required field (`character_tags` silently absent → downstream code gets `KeyError`)
 - Output `"formality": "high"` as a string instead of `0.88` as a float
 - Produce `"likely_season": "summer/fall"` — not in the allowed Literal set
-- Output syntactically invalid JSON (unclosed bracket on token 1800/2000)
+- Output syntactically invalid JSON (unclosed bracket on token 1800/4096)
 
-With 2,000 enrichment calls, you expect some failure rate even if each individual call succeeds 99% of the time. Prompt-and-validate requires: try → catch exception → retry → catch again → log failure. This is three LLM calls and two exception catches per failed row.
+With 35,889 enrichment calls, you expect some failure rate even if each individual call succeeds 99% of the time. Prompt-and-validate requires: try → catch exception → retry → catch again → log failure. This is three LLM calls and two exception catches per failed row.
 
-With `outlines`, invalid output is structurally impossible. The token generation process is constrained so that the output is always valid JSON matching `EnrichmentSchemaV2`. No validation needed because correctness is enforced at generation time. For 2,000 rows, this eliminates an entire class of failures.
+With `outlines`, invalid output is structurally impossible. The token generation process is constrained so that the output is always valid JSON matching `EnrichmentSchemaV2`. No validation needed because correctness is enforced at generation time. For 35,889 rows, this eliminates an entire class of failures.
 
-The cost: `outlines` requires loading the full model through the `outlines.models` API, which adds ~10s overhead per pipeline setup. Worth it for 2,000 rows.
+The cost: `outlines` requires loading the full model through the `outlines.models` API, which adds ~10s overhead per pipeline setup. Worth it for 35,889 rows.
 
 **Q: Why is the 98% success rate threshold for enrichment validation the right value?**
 
-2% failure rate on 2,000 rows = 40 fragrances with null `vibe_sentence`. Each failed row gets embedded with the raw `retrieval_text` only (no vibe, no mood tags, no enrichment signal). For those 40 fragrances, the embedding quality degrades to near-raw level.
+2% failure rate on 35,889 rows = ~718 fragrances with null `vibe_sentence`. Each failed row gets embedded with the raw `retrieval_text` only (no vibe, no mood tags, no enrichment signal). For those 718 fragrances, the embedding quality degrades to near-raw level.
 
-At 98% threshold: 40 bad embeddings in a corpus of 2,000 is a signal-to-noise ratio that won't noticeably degrade retrieval metrics. Benchmark cases that happen to need one of those 40 fragrances will be affected, but it's unlikely to dominate the 20-case evaluation.
+At 98% threshold: ~718 bad embeddings in a corpus of 35,889 is a signal-to-noise ratio that won't noticeably degrade retrieval metrics. Benchmark cases that happen to need one of those 718 fragrances will be affected, but it's unlikely to dominate the 20-case evaluation.
 
 Why not 99% or 100%? Enrichment failures have two causes: (1) rate limiting from Gemini API, (2) truncation issues with verbose fragrance entries. Both are manageable but not eliminatable. A 99% threshold would fail the pipeline on 20 bad rows and force a full re-run. 98% is the practical ceiling given real-world API reliability.
 
@@ -1334,7 +1334,7 @@ The pipeline L2-normalizes all embeddings before storage (`normalize_rows()` in 
 
 **Week 4 rationale for truncation (Legacy):**
 1. **Cross-model compatibility workaround.** Text branch used Qwen3-Embedding-8B; multimodal branch used Qwen3-VL-Embedding-8B. Truncating both to 1024-d via Matryoshka prefix was a workaround for their different dimensionality, though not a true semantic bridge.
-2. **Memory.** 35,889 × 1024-d saved 4× memory, which mattered on low-VRAM T4 GPUs.
+2. Memory. 35,889 × 1024-d saved 4× memory, which mattered on low-VRAM T4 GPUs.
 
 **Week 5 rationale for full 4096-d (Current):**
 1. **Single model eliminates the mismatch.** Qwen3-VL-Embedding-8B is now the sole model for both text and multimodal queries. There is no cross-model mismatch to bridge.
@@ -1350,7 +1350,7 @@ L2 normalization maps every embedding vector to the unit hypersphere: `v_norm = 
 Why this matters:
 - **Enables dot product as cosine similarity.** For unit vectors `a` and `b`: `a · b = ||a|| × ||b|| × cos(θ) = cos(θ)`. Without normalization, you'd need to divide by magnitudes at query time — a computation on every element of a 35,889-row matrix.
 - **Prevents length bias.** Embedding models sometimes produce longer vectors for longer texts. Without normalization, a fragrance with a long `retrieval_text` would artificially score higher against any query, not because it's more semantically relevant but because its embedding has higher magnitude.
-- **Pre-computation at storage time.** Normalizing once at embedding time (offline) means the per-query operation is pure matrix multiply. For 35,889 × 1024, this is ~147M floating-point multiply-accumulate operations — fast on any modern CPU or GPU.
+- **Pre-computation at storage time.** Normalizing once at embedding time (offline) means the per-query operation is pure matrix multiply. For 35,889 × 4096, this is ~147M floating-point multiply-accumulate operations — fast on any modern CPU or GPU.
 
 **Q: Why use the negative log-likelihood for the image CLIP scoring instead of a simpler formulation?**
 
@@ -1419,7 +1419,7 @@ LLM judges have known biases: they prefer longer responses, responses that sound
 
 Metadata-based scoring is deterministic and auditable: `attribute_match@3` asks "does the top result's formality attribute match the benchmark case's target formality?" This is a binary check computed from structured data. No LLM bias, no length preference, no prestige bias.
 
-The LLM judge (`gemini-2.5-pro`) is used as secondary scoring specifically because it can catch holistic failures that metadata can't — a recommendation that is technically "formal" but completely wrong in mood or accord family. Both scoring methods together are more reliable than either alone.
+The LLM judge (`gemini-1.5-pro`) is used as secondary scoring specifically because it can catch holistic failures that metadata can't — a recommendation that is technically "formal" but completely wrong in mood or accord family. Both scoring methods together are more reliable than either alone.
 
 **Q: Why require 3 independent label generation runs and take majority vote?**
 
@@ -1533,7 +1533,7 @@ Systematic bias in formality scores means:
 1. The structured branch (currently broken) would produce near-uniform scores — which is the same as the current broken implementation
 2. The CNN image branch compares outfit formality predictions against those biased scores — every fragrance appears "formal" → the CNN can never distinguish
 
-Detection: compute the distribution of enriched `formality` scores across Tier B and verify it roughly follows the expected distribution (not all-high, not all-low, covers the full range). This should be in `results/week2_report.md` Section 2 (fragrance embedding sanity check) but is currently pending.
+Detection: compute the distribution of enriched `formality` scores across the full corpus and verify it roughly follows the expected distribution (not all-high, not all-low, covers the full range). This should be in `results/week2_report.md` Section 2 (fragrance embedding sanity check) but is currently pending.
 
 **Q: What happens if the corpus embedding matrix and the corpus DataFrame have mismatched row counts?**
 
@@ -1661,7 +1661,7 @@ The expansion lookup table is the only non-ML component in the pipeline. It enco
 
 - Qwen3-VL-Embedding-8B: https://huggingface.co/Qwen/Qwen3-VL-Embedding-8B
 - MMEB Leaderboard: https://huggingface.co/spaces/TIGER-Lab/MMEB-Leaderboard
-- Gemini 3.1 Pro Preview: https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview
+- Gemini 1.5 Models: https://ai.google.dev/gemini-api/docs/models/gemini-1.5-pro
 - Gemini structured outputs: https://ai.google.dev/gemini-api/docs/structured-output
 - Gemini Batch API: https://ai.google.dev/gemini-api/docs/batch-api
 - outlines (constrained generation): https://github.com/dottxt-ai/outlines

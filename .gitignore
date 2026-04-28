@@ -37,8 +37,7 @@ artifacts/colab_upload_bundle/
 artifacts/colab_upload_bundle.tar.gz
 
 # === Stale enrichment CSV ===
-data/vibescent_enriched.csv
-data/vibescent_enriched_sample.csv
+# Removed from gitignore so it syncs to Colab!
 
 # === Image Processing ===
 train/
