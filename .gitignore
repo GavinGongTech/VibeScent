@@ -17,6 +17,7 @@ __pycache__/
 # === Large embedding arrays (>20 MB) — stored in Drive, not git ===
 artifacts/fragrance_*/embeddings.npy
 artifacts/multimodal_*/doc_embeddings.npy
+artifacts/qwen3vl_corpus/embeddings.npy
 embeddings/*.npy
 # Allow small artifacts to be committed
 !artifacts/occasions/embeddings.npy

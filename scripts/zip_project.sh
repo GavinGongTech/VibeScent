@@ -12,7 +12,9 @@ zip -rq vibescent.zip vibescent \
     -x "vibescent/.git/*" \
     -x "vibescent/.venv/*" \
     -x "vibescent/node_modules/*" \
-    -x "vibescent/artifacts/*" \
+    -x "vibescent/artifacts/fragrance_raw/*" \
+    -x "vibescent/artifacts/week2_outputs/*" \
+    -x "vibescent/artifacts/week2_precomputed/*" \
     -x "vibescent/checkpoints/*" \
     -x "vibescent/__pycache__/*" \
     -x "vibescent/.next/*" \

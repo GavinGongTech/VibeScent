@@ -932,7 +932,7 @@ The scraper (`src/vibescents/perfume_scraper.py` + `scraper_app.py`) queries the
 | Image CNN (optional) | ResNet-50 + CLIP hybrid (`NeilCNNWrapper`) | Local GPU | — | Loads Neil's checkpoint if provided; same `ImageHeadProbabilities` interface |
 | Enrichment LLM | Qwen3-8B | Local GPU (outlines) | — | Falls back to Gemini flash on T4 |
 | Enrichment fallback | gemini-flash (latest) | Google API | — | Structured output via response_schema |
-| Reranker (research only) | Qwen3-VL-Reranker-8B | Local GPU | — | Not in production path; ships if benchmark wins |
+| Reranker | Qwen3-VL-Reranker-8B | Local GPU | — | In production path on A100; skipped gracefully on VRAM shortage → MMR fallback |
 | Evaluation judge | gemini-1.5-pro | Google API | — | Different from label generator |
 | Label generator | gemini-1.5-pro-preview | Google API | — | 3-run majority vote per benchmark case |
 
@@ -955,6 +955,8 @@ Every fragrance must have all of these fields after enrichment:
 | `projection` | `str` | intimate / moderate / strong | LLM enrichment |
 | `mood_tags` | `list[str]` | ≥1 mood-oriented tag | LLM enrichment |
 | `color_palette` | `list[str]` | ≥1 color descriptor | LLM enrichment |
+| `gender` | `GenderLabel` | male / female / neutral | LLM enrichment (default: `"neutral"`) |
+| `frequency` | `FrequencyLabel` | occasional / everyday | LLM enrichment (default: `"everyday"`) |
 
 These fields feed three different downstream consumers:
 1. **`retrieval_text`** construction (`enrich.py`) — all fields contribute to the embeddable string
@@ -979,7 +981,7 @@ The CNN attribute-to-fragrance matching discretizes continuous floats at fixed t
 
 ### Multimodal Embedding Requires GPU at Inference
 
-`sig_mm` is zeroed on T4. The demo degradation path is tested and graceful, but it means T4 demos produce qualitatively different recommendations than A100 demos. This should be documented clearly in presentation materials.
+The Qwen3-VL-Embedding-8B model requires ~16 GB VRAM and is skipped on T4/CPU, producing a zero multimodal signal. The engine selects `_NO_MULTI_WEIGHTS` automatically in this case. T4 demos and A100 demos produce qualitatively different recommendations — the multimodal channel's absence removes the strongest cross-modal signal. This should be documented clearly in presentation materials.
 
 ---
 
@@ -1097,11 +1099,15 @@ Every `.npy` artifact has a companion `manifest.json` that stores: model name, c
 
 | Deliverable | Owner | Status |
 |---|---|---|
-| Qwen3-VL corpus re-embedding (offline pipeline) | Harsh | ⏳ In progress — `notebooks/harsh_offline_pipeline.ipynb` |
-| `artifacts/qwen3vl_corpus/embeddings.npy` | Harsh | ⏳ Pending notebook completion |
+| Qwen3-VL unified corpus re-embedding (all 35,889 rows, 4096-d) | Harsh | ✓ `artifacts/qwen3vl_corpus/embeddings.npy` |
+| BM25 post-fusion blend (`BM25CorpusScorer`, 10% weight) | Harsh | ✓ `src/vibescents/bm25_scorer.py` |
+| Hard filter `_hard_filter()` (Gala/Casual/Fresh/Warm gates) | Harsh | ✓ `src/vibescents/engine.py` |
+| CLIP 5-head image scorer (added gender + frequency heads) | Harsh | ✓ `src/vibescents/image_scoring.py` |
+| Qwen3-VL-Reranker-8B integration (local, MMR fallback) | Harsh | ✓ `src/vibescents/reranker.py` |
+| EnrichmentSchemaV2: `gender` + `frequency` fields | Harsh | ✓ `src/vibescents/enrich.py` |
 | Next.js luxury editorial frontend | Darren | ✓ `app/`, `components/`, `lib/` |
 | `start.sh` multi-service orchestration | Harsh | ✓ |
-| Demo validation and presentation | All | ⏳ Pending corpus embeddings |
+| Demo validation and presentation | All | ⏳ In progress |
 
 ---
 
@@ -1130,7 +1136,7 @@ Equal weights are the maximally uninformed prior — they assume all signals are
 - Multimodal (0.25): covers both modalities simultaneously across the **full 35,889-row corpus** but partially overlaps with the text branch signal. Slightly lower weight to avoid double-counting the shared text component.
 - Structured (0.15): lower weight because it relies on deterministic attribute arithmetic rather than semantic embedding, though the signal is high-quality and **fully query-aware**. It now covers the **full 35,889-row enriched corpus**.
 
-Equal weights (0.25 each) are used as the safe fallback when `best_weights.json` is missing.
+The four weight sets (`_FULL_WEIGHTS`, `_NO_IMAGE_WEIGHTS`, `_NO_MULTI_WEIGHTS`, `_TEXT_ONLY_WEIGHTS`) are hardcoded constants in `engine.py` — not loaded from any external file. Equal weights (0.25 each) are the fallback of last resort if an unknown channel combination is requested.
 
 **Q: Why min-max normalization instead of z-score normalization or softmax?**
 
@@ -1654,6 +1660,104 @@ After expansion: `"black tie gala formal event elegant luxury oriental, chypre, 
 Without expansion, the query vector sits in the event-description region of the embedding space, which is semantically distant from the fragrance-notes region. The cosine similarities between a bare "Gala" vector and the fragrance corpus will be uniformly low — the text branch contributes near-zero discriminative signal.
 
 The expansion lookup table is the only non-ML component in the pipeline. It encodes expert knowledge: a gala demands formal fragrance properties (opulent, sillage, black-tie) and specific accord families (oriental, chypre, oud). This is a handcrafted bridge between user intent vocabulary and fragrance vocabulary. The tradeoff: the expansion is fixed — if a user's context doesn't map cleanly to one of the lookup keys, the expansion falls back to the raw input. This is why `customNotes` (free text appended verbatim) exists.
+
+---
+
+### Overall System Design
+
+**Q: Why four separate channels (text, multimodal, image, structured) instead of one end-to-end model trained jointly?**
+
+A joint model would need labeled training data: `(outfit image, occasion, context) → correct ranked fragrance list`. We have 20 labeled benchmark cases. Training a joint model on 20 examples produces overfitting, not generalization.
+
+The 4-channel architecture decomposes the problem into subproblems that can each be solved with existing pretrained models and zero task-specific training:
+- Text: solved by retrieval-optimized embedding (Qwen3-VL-Embedding)
+- Vision: solved by CLIP zero-shot classification
+- Multimodal: solved by cross-modal retrieval (Qwen3-VL multimodal query)
+- Structured: solved by arithmetic on LLM-generated enrichment attributes
+
+Each of these is a well-posed retrieval or classification problem with strong pretrained solutions. Combining four high-quality signals with a weighted sum outperforms any single signal trained from scratch on 20 examples.
+
+**Q: What is the weakest link in the pipeline, and how would you fix it in a production version?**
+
+The weakest link is the **structured branch's attribute granularity**. It scores on `formality`, `fresh_warm`, `day_night`, and `likely_season` — five continuous dimensions. But fragrance character is high-dimensional: two fragrances can be identically formal, equally daytime, and equally spring-appropriate while being wildly different in character (one a light floral, one a heavy resinous chypre).
+
+The fix: replace the 5-dimensional structured branch with a learned attribute embedding space trained on fragrance-specific dimensions (accord family, sillage preference, note family vector). With user interaction data (clicks, purchases), you could learn a fragrance preference embedding per user that functions as a personalized structured signal. The structured branch is the channel most amenable to improvement with data — the other three channels are already near-SOTA.
+
+**Q: How does the system handle the cold-start problem when new fragrances are added to the catalog?**
+
+New fragrances must go through the full offline pipeline: enrichment → embedding → manifest update → engine reload. This is a one-time offline cost per new fragrance, not a per-query cost.
+
+In the current batch pipeline:
+1. Enrichment: ~1-2 LLM calls per fragrance via `enrich_dataframe()` → adds `retrieval_text`, `formality`, `vibe_sentence`, etc.
+2. Embedding: `Qwen3-VL-Embedding-8B` encodes `retrieval_text` → appended to `embeddings.npy`
+3. Manifest: updated `n_rows` count
+4. Engine reload: `VibeScoreEngine.from_artifacts()` reloads the full matrix
+
+The cold-start problem is asymmetric: new fragrances cannot be retrieved until they are enriched and embedded. For a production system, this would require an incremental embedding pipeline (not a full re-run) and an in-memory hot-swap mechanism for the corpus matrix. The current design doesn't support this — it's batch-only.
+
+**Q: How would you scale this system from 35,889 fragrances to 10 million products?**
+
+At 10M products, three components break:
+
+1. **Full matrix cosine similarity** — `(10M, 4096) @ (4096, 1)` is 41 billion floating-point operations per query. On A100, this takes ~400 ms per query — still acceptable. At 100 queries/second, the GPU is fully saturated on matrix multiplication alone. Solution: approximate nearest neighbor (ANN) search via FAISS with HNSW or IVF-PQ indices. HNSW retrieves top-100 from 10M vectors in ~1 ms with 97%+ recall.
+
+2. **BM25 scoring** — `BM25Okapi.get_scores()` over 10M documents is linear in corpus size. Solution: Elasticsearch or OpenSearch with BM25 built-in, responding in ~10-20 ms for top-100 at 10M scale.
+
+3. **Structured scoring** — pure arithmetic over a NumPy array scales to 100M rows trivially. This does not break.
+
+4. **Engine startup time** — loading a `(10M, 4096)` float32 matrix is 160 GB. This does not fit in VRAM. Solution: FAISS index on disk + memory-mapped metadata, or split corpus across multiple GPUs.
+
+The architecture's design with clean separation between channels makes each independently scalable.
+
+**Q: How would you improve the system if you had 10,000 labeled `(outfit, occasion) → fragrance` interactions from real users?**
+
+With real user interaction data, three major improvements become feasible:
+
+1. **Fusion weight learning.** Replace the grid-searched heuristic weights with weights learned via gradient descent on the labeled set. Minimize negative log-likelihood of the correct fragrance in the ranked list. Expected improvement: the learned weights will reflect actual user preferences (which channel matters more for which query types) rather than engineering intuition.
+
+2. **Reranker fine-tuning.** Fine-tune Qwen3-VL-Reranker-8B on contrastive pairs `(query, positive_fragrance, negative_fragrance)` drawn from the interaction data. A reranker trained on domain-specific preference data will significantly outperform the zero-shot baseline.
+
+3. **Personalization.** With user identifiers, you can learn per-user preference vectors in the embedding space. This turns the structured branch from a query-only signal to a `query × user` signal — a user who consistently prefers woody fragrances gets an implicit thumb on the scale toward woody candidates.
+
+The structured branch is likely the first to benefit: if users consistently prefer one accord family over another for the same occasion, the structured scoring function needs to model accord preference, not just formality/season attributes.
+
+**Q: Why is this architecture appropriate for a portfolio project, and what would be different in a production system?**
+
+**Portfolio strengths:**
+- Demonstrates breadth: embedding, vision, multimodal, arithmetic, BM25, reranking, MMR — each is a real technique with principled motivation
+- No shortcuts: the 35,889-row enrichment, unified corpus, and 5-head CLIP classifier are genuinely non-trivial engineering
+- Defensible design choices: every component has an explicit reason (as documented in this section)
+- Full pipeline: offline preprocessing, online inference, API, frontend, pricing scraper — not just a Jupyter notebook
+
+**Production gaps (explicitly acknowledged):**
+- Evaluation is 20 cases with LLM-generated labels — not human-labeled at scale
+- No A/B testing infrastructure or online learning
+- Single-node, no load balancing or fault tolerance
+- Batch-only corpus update (no incremental)
+- CLIP calibration not done (known gap)
+- No content filtering for offensive outfit inputs
+
+The portfolio framing is honest: this is a research prototype demonstrating the full stack of a multimodal retrieval system, not a deployed service. The production gaps are documented rather than hidden.
+
+---
+
+### Pipeline Robustness
+
+**Q: What happens if the embedding model produces NaN or infinite values?**
+
+The L2 normalization step (`normalize_rows()` in `similarity.py`) is the first line of defense: it divides by the L2 norm. If the norm is zero (which would happen with a zero vector), it divides by 1 instead (the `safe_norms = np.where(norms == 0, 1.0, norms)` guard). A NaN input would propagate through normalization as NaN, producing NaN cosine similarities, which would sort unpredictably via `argpartition`.
+
+The embedding sanity check (`embedding_sanity_check()`) catches this before the artifact is stored: it verifies variance of pairwise similarities > 0.001. NaN values would produce NaN variances and fail the check.
+
+In practice, NaN embeddings from transformer models indicate either (a) overflow in bfloat16 for very long inputs or (b) a corrupted model state. The offline pipeline would catch and flag these rows during the embedding stage.
+
+**Q: Why does `_safe_probability()` clip to `[ε, 1.0]` instead of trusting the softmax output to be in range?**
+
+Softmax over floating-point logits is mathematically guaranteed to produce values in (0, 1) exclusive. But:
+- `float32` arithmetic can produce values like `7.5e-37` for strongly unfavored classes — numerically non-zero but so small that `log(p)` produces `-85` and a product of five such values underflows to zero
+- `_EPSILON = 1e-8` clips these extreme values to a floor where `log(p) ≈ -18.4` — still a strong penalty, not an infinite one
+
+More importantly: numpy's float32 doesn't guarantee IEEE-754 denormal handling consistently across hardware. On some CUDA devices, denormals (values < ~1e-38) are flushed to zero in hardware for performance. Clipping to `1e-8` before calling `log()` ensures no hardware-dependent zero-log crashes.
 
 ---
 
