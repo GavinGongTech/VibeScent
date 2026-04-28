@@ -162,7 +162,29 @@
       "Bash(copilot --version)",
       "Bash(copilot --allow-all --help)",
       "Bash(copilot -p \"what flags do you support for automatic approval?\" --help)",
-      "Bash(copilot --allow-all --model auto -p \"In the file /home/bossman/projects/vibescent/src/vibescents/scraper_app.py, the SERPAPI_KEY env var detail is leaked when the key is missing. I already fixed the EnvironmentError handler to say 'Scraper configuration error'. But also read the file and tell me if there are any other obvious issues in under 10 lines.\" --output-format text)"
+      "Bash(copilot --allow-all --model auto -p \"In the file /home/bossman/projects/vibescent/src/vibescents/scraper_app.py, the SERPAPI_KEY env var detail is leaked when the key is missing. I already fixed the EnvironmentError handler to say 'Scraper configuration error'. But also read the file and tell me if there are any other obvious issues in under 10 lines.\" --output-format text)",
+      "Bash(copilot --allow-all --model auto -p 'Fix /home/bossman/projects/vibescent/src/vibescents/engine.py with exactly these two changes and nothing else: *)",
+      "Bash(copilot --allow-all --model auto -p 'Fix two files in /home/bossman/projects/vibescent for in-flight fetch cancellation: *)",
+      "Bash(copilot --allow-all --model auto -p 'Fix /home/bossman/projects/vibescent/app/api/recommend/route.ts with exactly these changes: *)",
+      "Bash(copilot --allow-all --model auto -p 'Fix /home/bossman/projects/vibescent/src/vibescents/perfume_scraper.py to run SerpAPI calls in parallel using ThreadPoolExecutor. Make these exact changes: *)",
+      "Bash(copilot --allow-all --model auto -p 'Fix /home/bossman/projects/vibescent/start.sh with these three changes: *)",
+      "Bash(GEMINI_CLI_TRUST_WORKSPACE=true gemini *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(cp /mnt/c/Users/007ha/Downloads/qwen3vl_corpus_extracted/qwen3vl_corpus/embeddings.npy /home/bossman/projects/vibescent/artifacts/qwen3vl_corpus/)",
+      "Bash(cp /mnt/c/Users/007ha/Downloads/qwen3vl_corpus_extracted/qwen3vl_corpus/manifest.json /home/bossman/projects/vibescent/artifacts/qwen3vl_corpus/)",
+      "Bash(nvidia-smi)",
+      "PowerShell(wsl -d Ubuntu -- git -C /home/bossman/projects/vibescent diff HEAD 2>&1)",
+      "Bash(gemini -p 'Code REUSE review only — do not fix anything, just report findings. *)",
+      "Bash(gemini -p 'Code QUALITY review only — do not fix anything, just report findings. *)",
+      "Bash(gemini -p 'Code EFFICIENCY review only — do not fix anything, just report findings. *)",
+      "PowerShell(pgrep *)",
+      "PowerShell(wsl -d Ubuntu -- bash -l -c \"pkill -f gemini 2>/dev/null; echo killed\")",
+      "PowerShell(wsl -d Ubuntu -- bash -l -c \"nvm ls 2>&1 | head -20\")",
+      "PowerShell(wsl -d Ubuntu -- bash -l -c \"source ~/.nvm/nvm.sh && nvm ls 2>&1 | head -20 && node --version\")",
+      "Read(///wsl.localhost/Ubuntu/home/bossman/projects/vibescent/docs/**)",
+      "Read(///wsl.localhost/Ubuntu/home/bossman/projects/vibescent/src/**)",
+      "Bash(.venv/bin/pip show *)",
+      "Bash(xargs basename *)"
     ]
   }
 }
