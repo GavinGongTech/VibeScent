@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "dev": "./start.sh",
+    "dev": "wsl.exe -d Ubuntu -e bash -c 'cd /home/bossman/projects/vibescent && ./start.sh'",
     "dev:web": "wsl.exe -d Ubuntu -e bash -c 'cd /home/bossman/projects/vibescent && node_modules/.bin/next dev'",
     "build": "wsl.exe -d Ubuntu -e bash -c 'cd /home/bossman/projects/vibescent && node_modules/.bin/next build'",
     "start": "wsl.exe -d Ubuntu -e bash -c 'cd /home/bossman/projects/vibescent && node_modules/.bin/next start'",
