@@ -18,10 +18,10 @@ You own:
 
 ---
 
-## Current State (April 18)
+## Current State (April 25, 2026)
 
 **Data delivery: complete.**
-`data/vibescent_500.csv` (canonical 500-row sample) and the full 35,889-row merged dataset (`data/vibescent_enriched.csv` / `data/processed/vibescent_unified.csv`) are in the repo. Downstream branches are consuming without manual cleanup.
+The full 35,889-row dataset is enriched and stored in `data/vibescent_enriched.csv`. This unified dataset is now used by all retrieval channels (Text, Multimodal, Image, Structured).
 
 **Frontend: complete.**
 Next.js app with Fragrantica scraper integrated. Commit `cf444a8 Integrated webscraper to front end`.
@@ -32,7 +32,7 @@ Next.js app with Fragrantica scraper integrated. Commit `cf444a8 Integrated webs
 
 **Primary source:** Fragrantica (`data/raw/fragrantica_clean.csv`) — scraped with semicolon-delimited CSV, ~35,000+ rows.
 **Secondary source:** Parfumo (`data/raw/parfumo_data_clean.csv`) — merged into unified dataset.
-**Merged corpus:** `data/processed/vibescent_unified.csv` — 35,889 rows, deduplicated, canonical schema applied.
+**Merged corpus:** `data/vibescent_enriched.csv` — 35,889 rows, fully enriched with LLM-generated attributes, deduplicated, canonical schema applied.
 
 ### Canonical Schema
 
@@ -45,16 +45,22 @@ Next.js app with Fragrantica scraper integrated. Commit `cf444a8 Integrated webs
 | `middle_notes` | string | Heart note list (main body, 20–60 min) |
 | `base_notes` | string | Base note list (dry-down, hours) |
 | `main_accords` | string | Comma-separated genre descriptors (e.g. woody, floral, spicy) |
-| `rating_count` | float | Number of Fragrantica reviews — used for Tier B selection |
+| `rating_count` | float | Number of Fragrantica reviews |
 | `rating_value` | float | Average rating score |
 | `gender` | string | Gender metadata if present |
 | `concentration` | string | EDP / EDT / Parfum etc. |
 | `year` | float | Release year |
 | `source` | string | `fragrantica` or `parfumo` |
-| `embedding_text` | string | Raw note concatenation (Karan's original field — kept for RAW baseline comparison) |
+| `likely_season` | enum | Enriched attribute: spring/summer/fall/winter |
+| `likely_occasion`| string | Enriched attribute: e.g. "Formal evening event" |
+| `formality` | float | Enriched attribute: 0-1 scale |
+| `fresh_warm` | float | Enriched attribute: 0-1 scale |
+| `day_night` | float | Enriched attribute: 0-1 scale |
+| `character_tags` | list | Enriched attribute: [luminous, opulent, ...] |
+| `vibe_sentence` | string | Enriched attribute: descriptive summary |
+| `retrieval_text` | string | Merged raw + enriched text for embedding |
 
-The following enriched fields are added **downstream by `enrich.py` (Harsh)** — Darren does not generate these:
-`likely_season`, `likely_occasion`, `formality`, `fresh_warm`, `day_night`, `character_tags`, `vibe_sentence`, `retrieval_text`
+The enriched fields are added **by `enrich.py` (Harsh)** — the pipeline has been run on the entire 35,889-row corpus.
 
 ---
 

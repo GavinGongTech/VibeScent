@@ -86,20 +86,20 @@ At inference time, `image_scoring.py:NeilCNNWrapper`:
 2. Runs forward pass, extracts 3 head outputs
 3. Returns `ImageHeadProbabilities(formal_probs, season_probs, time_probs)`
 
-`score_candidate_pool()` then scores each Tier B fragrance:
+`score_candidate_pool()` then scores each of the 35,889 fragrances in the full corpus:
 ```python
 score = P_formal[fragrance_formal_class]
       × P_season[fragrance_season_class]
       × P_time[fragrance_time_class]
 ```
 
-Scores are min-max normalized across the pool and fed into the fusion formula as `sig_img`.
+Scores are min-max normalized across the full pool and fed into the fusion formula as `sig_img`.
 
 ---
 
 ## Still Pending
 
-- **Comparison table:** CLIP-only vs CNN-only vs hybrid vs `Qwen3-VL-Embedding-8B` — required to justify the hybrid's value above each single-model baseline
+- **Comparison table:** CLIP-only vs CNN-only vs hybrid vs `Qwen3-VL-Embedding-8B` (4096-d) — required to justify the hybrid's value above each single-model baseline
 - **Image embeddings as `.npy`:** `artifacts/image_clip/embeddings.npy`, `artifacts/image_cnn/embeddings.npy`
 - **Failure mode note:** edge cases where the CNN misclassifies (e.g. avant-garde fashion that reads as casual despite formal intent)
 
@@ -111,7 +111,7 @@ Scores are min-max normalized across the pool and fed into the fusion formula as
 |---|---|
 | `models/cnn_clip_hybrid.py` | ✅ |
 | `artifacts/colab_upload_bundle/checkpoints/cnn/best.pt` | ✅ |
-| `src/vibescents/qwen3_vl_embedding.py` | ✅ |
+| `src/vibescents/qwen3_vl_embedding.py` (4096-d) | ✅ |
 | CLIP-only vs CNN-only vs hybrid comparison table | ❌ Pending |
 | `artifacts/image_clip/embeddings.npy` | ❌ Pending |
 | `artifacts/image_cnn/embeddings.npy` | ❌ Pending |

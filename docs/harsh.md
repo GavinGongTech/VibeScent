@@ -37,15 +37,15 @@ You do not own:
 | Text embedding | `Qwen3-Embedding-8B` | Local GPU | #1 MTEB English 68.32 |
 | Multimodal embedding | `Qwen3-VL-Embedding-8B` | Local GPU | #1 MMEB-V2 77.8 |
 | Enrichment LLM | `Qwen3.5-27B-GPTQ-Int4` (local) / `gemini-3-flash-preview` (API fallback) | Local / Google | Structured output, schema-enforced |
-| Reranker | `gemini-3.1-pro-preview` | Google | Multimodal input, structured output |
+| Reranker | `Qwen3-VL-Reranker-8B` | Local GPU | Local multimodal reranking |
 | Evaluation judge | `gemini-2.5-pro` | Google | Separated from label generator |
 
-Text embedding dimensionality: **1024** (Matryoshka prefix).
-Multimodal embedding dimensionality: **1536** (cross-modal compatibility with Gemini embeddings).
+Text embedding dimensionality: **4096** (Full vector).
+Multimodal embedding dimensionality: **4096** (cross-modal compatibility).
 
 ---
 
-## Current State (April 18)
+## Current State (April 25, 2026)
 
 ### Done
 
@@ -54,7 +54,7 @@ Multimodal embedding dimensionality: **1536** (cross-modal compatibility with Ge
 | Text embedder — VoyageEmbedder, GeminiEmbedder, Qwen3VLMultimodalEmbedder | `src/vibescents/embeddings.py` |
 | Enrichment pipeline — dual-LLM fallback, batch checkpointing, JSONL failure log | `src/vibescents/enrich.py` |
 | Score fusion — min-max normalize, weighted sum, weight grid search | `src/vibescents/fusion.py` |
-| Reranker — Gemini multimodal, schema-validated output | `src/vibescents/reranker.py` |
+| Reranker — Qwen3-VL multimodal reranker with sub-score mirroring | `src/vibescents/reranker.py` |
 | Pipeline orchestration utilities — manifest system, GPU tier detection, disk guard, stage gates, embed_corpus with checkpointing | `src/vibescents/week2_pipeline.py` |
 | Pydantic schemas — all pipeline contracts | `src/vibescents/schemas.py` |
 | Similarity utilities — cosine matrix, top-k, weighted sum | `src/vibescents/similarity.py` |
@@ -62,20 +62,18 @@ Multimodal embedding dimensionality: **1536** (cross-modal compatibility with Ge
 | FastAPI backend — /healthz, /recommend, protocol injection | `src/vibescents/backend_app.py` |
 | Qwen3-VL embedder implementation | `src/vibescents/qwen3_vl_embedding.py` |
 | 21-stage orchestration notebook (Kaggle T4 compatible) | `notebooks/harsh_week2_pipeline.ipynb` |
-| Occasion embedding matrix (8 × 1536) + similarity heatmap | `artifacts/occasions/` |
-| Raw fragrance embedding matrix (500 × 1536) | `artifacts/fragrance_raw/embeddings.npy` |
-| Week 2 report — sections 1 and 5 complete | `results/week2_report.md` |
+| Occasion embedding matrix (8 × 4096) + similarity heatmap | `artifacts/occasions/` |
+| Full enriched fragrance embedding matrix (35,889 × 4096) | `artifacts/fragrance_raw/embeddings.npy` |
+| Full corpus enrichment run (35,889 rows) | `data/vibescent_enriched.csv` |
+| Week 2-5 reports complete | `results/` |
 
 ### Pending
 
 | Task | Blocker |
 |---|---|
-| Full 35,889-row corpus embedding at 1024-dim | Needs full Kaggle session (pipeline is ready — hardware/time constraint) |
-| `artifacts/fragrance_enriched/embeddings.npy` | Enrichment run on full Tier B must complete first |
-| Raw vs enriched retrieval comparison | Needs enriched embeddings |
-| `artifacts/benchmark_cases.json` (20 labels) | Needs API keys and pipeline run |
-| `results/week2_report.md` sections 2, 3, 6, 7 | Needs above artifacts |
-| Multimodal retrieval on 3+ outfit images | Requires Colab Pro A100 (~16 GB VRAM) |
+| Raw vs enriched retrieval comparison | Refinement on full corpus |
+| `artifacts/benchmark_cases.json` (20 labels) | Final validation pass |
+| Multimodal retrieval on 10+ outfit images | Batch processing optimization |
 
 ---
 

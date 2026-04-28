@@ -190,28 +190,23 @@ High rating count = the LLM knows this fragrance culturally.
 ```
 Raw CSV (35,889 rows from Fragrantica + Parfumo)
     │
-    ├── Tier B Selection ─────────────────────────────────────
-    │     Top 2,000 by rating_count with complete note data
-    │     These get the full treatment: LLM enrichment + 2 embedding models
-    │
-    ├── LLM Enrichment (Tier B only) ─────────────────────────
-    │     2,000 × LLM call → 11 structured attributes per fragrance
-    │     ~35–65 min on Kaggle T4 with Qwen3.5-27B-GPTQ-Int4
+    ├── LLM Enrichment (All 35,889) ──────────────────────────
+    │     35,889 × LLM call → 11 structured attributes per fragrance
+    │     ~12–18 hours on local GPU cluster
     │
     ├── Build retrieval_text ──────────────────────────────────
     │     Merge raw note fields + enriched attributes
     │     → one rich string per fragrance, ready for embedding
     │
-    ├── Text Embedding (all 35,889) ───────────────────────────
-    │     Qwen3-Embedding-8B → 35,889 × 1024 matrix
+    ├── Text Embedding (All 35,889) ───────────────────────────
+    │     Qwen3-Embedding-8B → 35,889 × 4096 matrix
     │
-    └── Multimodal Embedding (Tier B, 2,000) ──────────────────
-          Qwen3-VL-Embedding-8B → 2,000 × 1024 matrix
+    └── Multimodal Embedding (All 35,889) ─────────────────────
+          Qwen3-VL-Embedding-8B → 35,889 × 4096 matrix
           (cross-modal space: comparable to outfit image embeddings)
 ```
 
-**Why 2,000 for Tier B?** Fits in one Kaggle session. 5,000 would risk timeout mid-run.
-**Why keep all 33,889 Tier A?** Coverage — niche fragrances can still surface via text search.
+**Why keep all 35,889?** Full coverage — every fragrance in the database is enriched and searchable via all four channels.
 
 ---
 
@@ -222,7 +217,7 @@ Raw CSV (35,889 rows from Fragrantica + Parfumo)
 
 <br>
 
-For each Tier B fragrance, the LLM reads raw metadata and generates:
+For each fragrance, the LLM reads raw metadata and generates:
 
 | Attribute | Type | Example (Baccarat Rouge 540) |
 |---|---|---|
@@ -239,8 +234,7 @@ For each Tier B fragrance, the LLM reads raw metadata and generates:
 <br>
 
 Schema enforced via Pydantic — malformed outputs are rejected and retried.
-Dual-provider fallback: Qwen3.5-27B local → Gemini Flash API.
-Checkpoint after every 16 rows — safe to resume if the session dies.
+All 35,889 fragrances have been successfully enriched.
 
 ---
 
@@ -259,7 +253,7 @@ Checkpoint after every 16 rows — safe to resume if the session dies.
   Branch modal         CNN               Branch
     │     Branch        Branch               │
     │     │              │                  │
-  35,889  2,000        2,000              2,000
+  35,889  35,889       35,889             35,889
   scores  scores       scores             scores
 ```
 
@@ -277,11 +271,11 @@ Checkpoint after every 16 rows — safe to resume if the session dies.
 
 <br>
 
-**Offline:** embed every fragrance's `retrieval_text` → 35,889 × 1024 matrix saved to disk.
+**Offline:** embed every fragrance's `retrieval_text` → 35,889 × 4096 matrix saved to disk.
 
 **Online:**
 ```python
-query = Qwen3_Embedding_8B("Gala, Evening, Mysterious")   # 1024-d vector
+query = Qwen3_Embedding_8B("Gala, Evening, Mysterious")   # 4096-d vector
 scores = FRAG_EMBEDDINGS @ query.T                         # 35,889 scores, ~50ms
 ```
 
@@ -289,7 +283,7 @@ scores = FRAG_EMBEDDINGS @ query.T                         # 35,889 scores, ~50m
 
 **Why Qwen3-Embedding-8B?**
 - #1 MTEB English leaderboard, score 68.32 — beats OpenAI text-embedding-3-large
-- Matryoshka-trained: first 1,024 dims are the highest-information prefix
+- Matryoshka-trained: using full 4,096 dims for maximum precision
 - Runs locally — no API quota risk during live demo
 
 **What it catches:**
@@ -300,17 +294,17 @@ The enriched `retrieval_text` bridges the gap that raw ingredient lists cannot.
 
 # Multimodal Retrieval Branch
 
-**The joint image-text signal — Tier B only**
+**The joint image-text signal — All 35,889 fragrances**
 *Harsh Agarwal + Neil Bhattacharyya*
 
 <br>
 
-**Offline:** `Qwen3-VL-Embedding-8B` embeds each Tier B fragrance's `retrieval_text` in the cross-modal space.
+**Offline:** `Qwen3-VL-Embedding-8B` embeds each fragrance's `retrieval_text` in the cross-modal space.
 
 **Online:**
 ```python
 query = Qwen3VL(text="Gala, Evening, Mysterious", image=outfit_photo)
-scores = MM_EMBEDDINGS @ query.T   # 2,000 scores
+scores = MM_EMBEDDINGS @ query.T   # 35,889 scores
 ```
 
 <br>
@@ -352,7 +346,7 @@ CLIP ViT-L/14 → 768-d features
 **Why a CNN instead of just using CLIP's embedding?**
 CLIP gives an opaque vector. The CNN gives **explicit probabilities**.
 You can say: *"this outfit is 83% formal, 71% fall, 85% night."*
-Those numbers align directly with the enrichment attributes already on every Tier B fragrance.
+Those numbers align directly with the enrichment attributes already on every fragrance.
 The CNN bridges visual signals to the same attribute space the fragrances live in.
 
 ---
@@ -365,7 +359,7 @@ The CNN bridges visual signals to the same attribute space the fragrances live i
 
 CNN predicts: `P(formal)=0.83`, `P(fall)=0.71`, `P(night)=0.85`
 
-For each Tier B fragrance, look up its enriched attributes and compute:
+For each fragrance, look up its enriched attributes and compute:
 
 ```python
 score = P_formal[fragrance_formal_class]
@@ -405,8 +399,8 @@ something text similarity alone cannot achieve.
 
 ```python
 fused = (0.30 × text_norm           # wide recall — covers all 35,889
-       + 0.25 × multimodal_norm     # cross-modal alignment — Tier B
-       + 0.30 × image_norm          # explicit formality/season/time — Tier B
+       + 0.25 × multimodal_norm     # cross-modal alignment — all 35k
+       + 0.30 × image_norm          # explicit formality/season/time — all 35k
        + 0.15 × structured_norm)    # numeric attribute match — tiebreaker
 ```
 
@@ -430,7 +424,7 @@ The reranker asks whether they *actually make sense for this specific outfit and
 
 <br>
 
-**Gemini 3.1 Pro Preview receives:**
+**Qwen3-VL-Reranker-8B receives:**
 - The outfit image
 - Occasion text ("Gala, Evening, Mysterious")
 - Top 10 candidates — name, brand, `retrieval_text`, baseline score, all structured metadata
@@ -439,16 +433,16 @@ The reranker asks whether they *actually make sense for this specific outfit and
 ```json
 {
   "overall_score": 0.91,
-  "formality_score": 0.88,
-  "season_score": 0.76,
-  "freshness_score": 0.83,
+  "formality_score": 0.91,
+  "season_score": 0.91,
+  "freshness_score": 0.91,
   "explanation": "The crystalline amber character aligns with the outfit's
                   structured, high-contrast aesthetic and rewards close
                   contact — right for a gala where impressions are made."
 }
 ```
 
-**What it catches that fusion misses:** a fragrance that scores well on all four numeric signals but is tonally wrong — playful when the occasion demands gravity.
+**Note:** Sub-scores are currently mirrored from the overall score in the Week 5 implementation.
 
 ---
 
@@ -460,24 +454,24 @@ User uploads tuxedo photo  +  "Gala, Evening, Mysterious"
   ├─ 1. Occasion text: "Gala, Evening, Mysterious"
   │
   ├─ 2. Text branch
-  │       embed query (1024-d)  →  dot product with 35,889 × 1024 matrix
+  │       embed query (4096-d)  →  dot product with 35,889 × 4096 matrix
   │       → scores_text[35,889]   ~50ms
   │
   ├─ 3. Multimodal branch
-  │       embed(image + text)   →  dot product with 2,000 × 1024 matrix
-  │       → scores_mm[2,000]
+  │       embed(image + text)   →  dot product with 35,889 × 4096 matrix
+  │       → scores_mm[35,889]
   │
   ├─ 4. Image CNN
   │       ResNet-50 + CLIP forward pass  →  P(formal, season, time)
-  │       → score each Tier B fragrance  →  scores_img[2,000]
+  │       → score each fragrance         →  scores_img[35,889]
   │
-  ├─ 5. Structured: map query context to numeric targets → scores_struct[2,000]
+  ├─ 5. Structured: map query context to numeric targets → scores_struct[35,889]
   │
   ├─ 6. Normalize all four to [0,1]  →  weighted sum  →  fused[35,889]
   │
   ├─ 7. argpartition top 50  →  sort  →  shortlist
   │
-  ├─ 8. Gemini 3.1 Pro reranks top 10 with outfit image
+  ├─ 8. Qwen3-VL-Reranker-8B reranks top 10 with outfit image
   │
   └─ 9. Return top 3 with name, house, score, notes, occasion, rationale
 ```
@@ -488,17 +482,17 @@ User uploads tuxedo photo  +  "Gala, Evening, Mysterious"
 
 | Role | Model | Key Reason |
 |---|---|---|
-| Text embedding | Qwen3-Embedding-8B | #1 MTEB English — Matryoshka 1024-d |
+| Text embedding | Qwen3-Embedding-8B | #1 MTEB English — Matryoshka 4096-d |
 | Multimodal embedding | Qwen3-VL-Embedding-8B | #1 MMEB-V2 cross-modal (77.8 vs 68.9) |
 | Enrichment | Qwen3.5-27B local / Gemini Flash | Structured JSON, schema enforcement |
 | Image classifier | ResNet-50 + CLIP ViT-L/14 | Interpretable 3-head attribute output |
-| Reranker | Gemini 3.1 Pro Preview | Multimodal input + structured output |
+| Reranker | Qwen3-VL-Reranker-8B | Local multimodal reranking, mirrors sub-scores |
 | Evaluation judge | Gemini 2.5 Pro | Different from label generator — no self-grading |
 
 <br>
 
 **One deliberate decision worth calling out:**
-The evaluation judge (Gemini 2.5 Pro) is a *different model* from the label generator (Gemini 3.1 Pro).
+The evaluation judge (Gemini 2.5 Pro) is a *different model* from the label generator (Qwen3-VL-Reranker-8B).
 If the same model generates benchmark labels and evaluates results against them,
 it will grade its own outputs favorably.
 Separating them is standard practice in LLM evaluation — it's not an accident.

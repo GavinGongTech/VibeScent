@@ -36,13 +36,13 @@ test_vibe_pipeline.py   →  validation results
 | | Karan's cluster approach | Harsh's per-fragrance enrichment |
 |---|---|---|
 | Granularity | Cluster-level — one label per group of ~100 fragrances | Per-fragrance — 11 individual attributes each |
-| Embedding dim | 384 (small SentenceTransformer model) | 1024 (Qwen3-Embedding-8B, #1 MTEB) |
-| LLM calls | One per cluster | One per fragrance |
+| Embedding dim | 384 (small SentenceTransformer model) | 4096 (Qwen3-Embedding-8B, #1 MTEB) |
+| LLM calls | One per cluster | One per fragrance (All 35,889 complete) |
 | Output | `vibe_cluster_id` integer per row | `formality`, `day_night`, `character_tags`, `vibe_sentence`, etc. |
-| Speed | Fast — cheap embeddings, few LLM calls | Slow — 2,000 LLM calls, large model |
+| Speed | Fast — cheap embeddings, few LLM calls | Heavy — All 35,889 pre-enriched offline |
 | Quality | Coarser — similar fragrances get the same label | Precise — each fragrance is individually characterized |
 
-**These are not interchangeable.** Karan's cluster IDs are useful as a coarse first-pass signal; Harsh's enrichment attributes are what the scoring and reranking use at inference time.
+**Note on Week 5 Reality:** Harsh's enrichment pipeline has been successfully run on the entire 35,889-row corpus. The "Tier B" concept is legacy; the full dataset is now enriched and searchable with high precision.
 
 ---
 

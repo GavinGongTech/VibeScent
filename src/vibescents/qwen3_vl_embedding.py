@@ -165,13 +165,14 @@ class Qwen3VLEmbedder:
         self.max_frames = max_frames
         self.default_instruction = default_instruction
         _load_in_8bit = kwargs.pop("load_in_8bit", False)
-        if _load_in_8bit:
+        _load_in_4bit = kwargs.pop("load_in_4bit", False)
+        if _load_in_8bit or _load_in_4bit:
             from transformers import BitsAndBytesConfig as _BnbCfg
 
             self.model = Qwen3VLForEmbedding.from_pretrained(
                 model_name_or_path,
                 trust_remote_code=True,
-                quantization_config=_BnbCfg(load_in_8bit=True),
+                quantization_config=_BnbCfg(load_in_8bit=_load_in_8bit, load_in_4bit=_load_in_4bit),
                 device_map="auto",
                 **kwargs,
             )

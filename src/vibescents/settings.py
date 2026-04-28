@@ -21,7 +21,7 @@ class Settings:
     # Alternatives: "Qwen/Qwen3-14B", "google/gemma-3-12b-it", "google/gemma-3-27b-it"
     enrichment_model: str = "Qwen/Qwen3-8B"
 
-    embedding_dimensions: int = 1024
+    embedding_dimensions: int = 4096
     rerank_top_k: int = 10
     retrieve_top_k: int = 20
 

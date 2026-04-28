@@ -19,15 +19,19 @@ class Qwen3VLMultimodalEmbedder:
     _BATCH_SIZE = 8
 
     def __init__(
-        self, settings: Settings | None = None, *, load_in_8bit: bool = False
+        self, settings: Settings | None = None, *, load_in_8bit: bool = False, load_in_4bit: bool = False
     ) -> None:
         self.settings = settings or Settings.from_env()
         import torch
         from vibescents.qwen3_vl_embedding import Qwen3VLEmbedder as _Inner
 
-        _model_kwargs: dict = (
-            {"load_in_8bit": True} if load_in_8bit else {"torch_dtype": torch.bfloat16}
-        )
+        _model_kwargs: dict = {}
+        if load_in_4bit:
+            _model_kwargs["load_in_4bit"] = True
+        elif load_in_8bit:
+            _model_kwargs["load_in_8bit"] = True
+        else:
+            _model_kwargs["torch_dtype"] = torch.bfloat16
         self._embedder = _Inner(
             model_name_or_path=self.settings.multimodal_embedding_model,
             **_model_kwargs,

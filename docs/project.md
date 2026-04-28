@@ -2,7 +2,7 @@
 
 > Last updated: April 27, 2026. Incorporates all architecture decisions, ML design rationale, and implementation details through Week 5.
 >
-> **Current implementation status (Week 5):** All four scoring channels and the full frontend are shipped. The image branch uses CLIP ViT-L/14 (`openai/clip-vit-large-patch14`) with **5 classification heads** (formal, season, time, gender, frequency) — zero-shot, no outfit-specific training required. The structured branch is fully query-aware. The reranker uses `Qwen3VLReranker` (Qwen3-VL-Reranker-8B, local GPU, zero API keys at inference) — not yet in the production path but ships if it wins on the benchmark. The corpus was re-embedded with Qwen3-VL-Embedding-8B at full 4096-d: `artifacts/qwen3vl_corpus/embeddings.npy` (35,889 × 4096, L2-normalized). Text and multimodal channels share this single unified matrix. BM25 post-fusion blend (`rank_bm25.BM25Okapi`) and a hard context filter (`_hard_filter()`) are live in the production path. MMR diversification (`mmr_select`, λ=0.5) is the reranker fallback when GPU is unavailable.
+> **Current implementation status (Week 5):** All four scoring channels and the full frontend are shipped. The corpus consists of **35,889 fragrances**, all of which are fully enriched and embedded—the "Tier B" quality gap has been eliminated. The image branch uses CLIP ViT-L/14 (`openai/clip-vit-large-patch14`) with **5 classification heads** (formal, season, time, gender, frequency). The structured branch is fully query-aware. The reranker is **Qwen3-VL-Reranker-8B** (Local GPU, zero API keys), with sub-scores mirrored from the overall score. The corpus is embedded with **Qwen3-VL-Embedding-8B at full 4096-d**: `artifacts/qwen3vl_corpus/embeddings.npy` (35,889 × 4096, L2-normalized). Text and multimodal channels share this single unified matrix. BM25 post-fusion blend and a hard context filter are live. MMR diversification is the reranker fallback.
 
 ---
 
@@ -83,11 +83,11 @@ Each row has: brand, name, top/middle/base notes, main accords, gender, concentr
 
 **Step 2 — You enrich the full corpus of 35,889 fragrances.**
 
-In Week 5, we moved beyond the 2,000-fragrance "Tier B" limit. Every row in the dataset now undergoes LLM enrichment. While this takes several hours on a local GPU or via Batch API, it ensures that long-tail niche fragrances carry the same rich semantic signals as global bestsellers.
+Every row in the dataset now undergoes LLM enrichment. We have moved beyond the historical 2,000-fragrance "Tier B" limit. Every fragrance in the dataset is now enriched, ensuring that long-tail niche fragrances carry the same rich semantic signals as global bestsellers.
 
 **Step 3 — You translate fragrances from chemistry to experience vocabulary (Enrichment).**
 
-For each of the 35,889 fragrances, an LLM (Qwen3.5-27B-GPTQ-Int4 locally, or Gemini flash as fallback) reads the raw metadata and generates:
+For each of the 35,889 fragrances, an LLM (**Qwen3-8B** locally) reads the raw metadata and generates:
 
 ```
 formality: 0.88          (how dressed-up is this fragrance?)
@@ -121,13 +121,13 @@ This string now lives in the same semantic space as how users describe occasions
 
 **Step 5 — You embed every fragrance into a 4096-dimensional vector (Unified Corpus).**
 
-Qwen3-VL-Embedding-8B reads each `retrieval_text` string and outputs a 4096-dimensional vector. In Week 5, the source is `vibescent_enriched_full.csv` — all 35,889 rows carry enriched fields (not just the top-2000 Tier B). The vectors are L2-normalized and saved as a single unified matrix: `artifacts/qwen3vl_corpus/embeddings.npy` (shape 35,889 × 4096, float32, ~560 MB).
+Qwen3-VL-Embedding-8B reads each `retrieval_text` string and outputs a 4096-dimensional vector. All 35,889 rows carry enriched fields. The vectors are L2-normalized and saved as a single unified matrix: `artifacts/qwen3vl_corpus/embeddings.npy` (shape 35,889 × 4096, float32, ~560 MB).
 
-Week 5 change from Week 4: the pipeline pivoted from Qwen3-Embedding-8B at truncated 1024-d (stored at `fragrance_raw_full/embeddings.npy`) to Qwen3-VL-Embedding-8B at full 4096-d. The Matryoshka truncation-to-1024 trick that was applied in Week 4 is dropped — the VL model's superior cross-modal alignment justifies the 4× memory increase, and the embedding quality improvement at 4096-d exceeds the cost.
+Week 5 Reality: The pipeline uses Qwen3-VL-Embedding-8B at full 4096-d. No Matryoshka truncation or 1024-d projection is applied. The VL model's superior cross-modal alignment is leveraged at its native resolution, providing maximum semantic density for retrieval.
 
 **Step 6 — Unified text+multimodal corpus: one matrix for both channels.**
 
-In Week 5, the separate multimodal-only corpus (`multimodal_2k/doc_embeddings.npy`, 2000 × 1024) is eliminated. Both the text channel query (text-only embedding of the occasion phrase) and the multimodal channel query (joint image + text embedding) now query against the same `artifacts/qwen3vl_corpus/embeddings.npy` matrix.
+Both the text channel query (text-only embedding of the occasion phrase) and the multimodal channel query (joint image + text embedding) query against the same `artifacts/qwen3vl_corpus/embeddings.npy` matrix. Historical "Tier" distinctions are obsolete for retrieval—the full 35,889-row corpus is reachable by all signals.
 
 This is architecturally valid because all three artifacts — corpus documents, text queries, and multimodal queries — are produced by the same model (Qwen3-VL-Embedding-8B) and therefore live in the same embedding space. Cosine similarity between them is meaningful. The prior cross-model mismatch (Qwen3-Embedding text vectors vs. Qwen3-VL query vectors) that existed in Week 4 is fully resolved.
 
@@ -172,7 +172,7 @@ This is a matrix multiply: the pre-computed 35,889 × 4096 matrix (`artifacts/qw
 
 Time: ~50ms on CPU, ~5ms on GPU. Single BLAS matrix multiply.
 
-What it finds: fragrances whose retrieval_text is semantically close to the expanded occasion phrase. Because both corpus and query are produced by Qwen3-VL-Embedding-8B, there is no cross-model embedding space mismatch. All 35,889 rows have enriched `retrieval_text` (source: `vibescent_enriched_full.csv`) — the quality gap between "Tier A" and "Tier B" fragrances is significantly reduced.
+What it finds: fragrances whose retrieval_text is semantically close to the expanded occasion phrase. Because both corpus and query are produced by Qwen3-VL-Embedding-8B, there is no cross-model embedding space mismatch. All 35,889 rows have enriched `retrieval_text` (source: `vibescent_enriched.csv`).
 
 **Step 3 — Multimodal Branch produces 35,889 scores.**
 
@@ -182,7 +182,7 @@ The model reads both the image and the text simultaneously and produces a single
 
 `sig_mm = CORPUS_EMBEDDINGS @ q_mm.T` → 35,889 scores (same unified matrix as the text branch).
 
-Week 5 change: the multimodal branch no longer queries a separate 2,000-row matrix. It queries the full 35,889-row corpus. This means the visual signal from the outfit photo now influences scores for every fragrance in the database — not just the top-2000.
+Week 5 Reality: the multimodal branch queries the full 35,889-row corpus at full 4096-d. This means the visual signal from the outfit photo now influences scores for every fragrance in the database. There is no truncation or limited candidate pool.
 
 Why this is different from the text branch: the joint embedding shifts based on the outfit's visual character. A dark, structured blazer in the outfit photo pushes the query vector toward "formal, evening" associations even if the user typed "casual." The image cannot be ignored; the text branch cannot see it.
 
@@ -287,7 +287,7 @@ The 20 candidates go to `Qwen3VLReranker` (Qwen3-VL-Reranker-8B, local GPU). The
 - The occasion query string
 - Each candidate's `build_candidate_text()` output: `"Name by Brand | vibe_sentence | Occasion: X | Notes: Y"`
 
-The reranker returns per-candidate `overall_score`, `formality_score`, `season_score`, `freshness_score`, and `explanation`. In the current pointwise implementation (`src/vibescents/reranker.py`), the model populates `formality_score`, `season_score`, and `freshness_score` by mirroring the `overall_score` (representing the model's confidence in the total match). Top 3 by `overall_score` are selected.
+The reranker returns per-candidate `overall_score`, `formality_score`, `season_score`, `freshness_score`, and `explanation`. In the current implementation, **the sub-scores (formality, season, freshness) are mirrored from the overall score**, representing the model's confidence in the total match. Top 3 by `overall_score` are selected.
 
 If the reranker is unavailable (no GPU, load failure), MMR diversification runs instead:
 ```python
@@ -329,7 +329,7 @@ Each signal covers a blind spot of the others:
 - Text alone: can't see the outfit, biased by vocabulary overlap
 - Multimodal alone: limited to 2K fragrances, black-box
 - Image CNN alone: 9 values total, no semantic nuance
-- Structured alone (ideal): no neural understanding of similarity, only attribute arithmetic
+- Structured alone (ideal): no neural understanding of similarity, only attribute arithmetic—but **fully query-aware** as it sets targets based on user context.
 
 Together, they triangulate: if all four agree a fragrance is the best match, confidence is high. If they disagree, the weighted sum finds the centroid, which is still better than any single signal alone.
 
@@ -392,7 +392,7 @@ The only way to connect them is to translate the fragrance from chemistry vocabu
 
 ### What Enrichment Does
 
-For every fragrance in the corpus, an LLM (Qwen3.5-27B-GPTQ-Int4 locally, or Gemini flash via API as fallback) receives the raw metadata as a prompt and acts as a fragrance expert:
+For every fragrance in the corpus, an LLM (**Qwen3-8B** locally) receives the raw metadata as a prompt and acts as a fragrance expert:
 
 **Input prompt:**
 ```
@@ -425,18 +425,16 @@ Concentration: EDP
 
 The LLM is doing **knowledge distillation** — it has seen thousands of fragrance reviews, editorial pieces, and cultural associations. It can infer that BR540's amber-saffron accord reads as "luxurious" and "formal" in the cultural context of how people actually talk about fragrance.
 
-### Constrained Decoding — Why `outlines` Is Critical
+### Constrained Decoding — Why `outlines` and `vLLM` Are Critical
 
-The enrichment pipeline uses `outlines` for structured output generation. This is not just JSON prompting. `outlines` intercepts the token logit distribution at each decoding step and zeroes out any token that would produce output incompatible with `EnrichmentSchemaV2`'s JSON schema. The beam search itself is constrained to the schema's grammar.
+The enrichment pipeline uses guided decoding (via `outlines` or `vLLM`) for structured output generation. This is not just JSON prompting. These tools intercept the token logit distribution at each decoding step and zero out any token that would produce output incompatible with `EnrichmentSchemaV2`'s JSON schema.
 
 Concretely:
-- `likely_season` can only be one of `["spring", "summer", "fall", "winter", "all-season"]` — enforced at the token level, not by post-processing
-- `formality` must be a float between 0.0 and 1.0 — the tokenizer cannot emit a value outside this range
-- `character_tags` must have 3–5 items — the generation stops exactly at the constraint boundary
+- `likely_season` can only be one of `["spring", "summer", "fall", "winter", "all-season"]` — enforced at the token level.
+- `formality` must be a float between 0.0 and 1.0.
+- `character_tags` must have 3–5 items.
 
-This matters because enrichment runs on 2,000 rows. A malformed output on row 847 that slips through would silently degrade that fragrance's embedding — you'd never know unless you explicitly checked. Constrained decoding makes malformed output structurally impossible.
-
-Fallback: when running on T4 GPU (insufficient VRAM for Qwen3.5-27B), the pipeline falls back to `GeminiEnrichmentClient`, which uses Gemini's native `response_schema` parameter to achieve the same constraint. Both paths produce identical `EnrichmentSchemaV2` objects.
+This matters because enrichment runs on all **35,889 rows**. Guided decoding makes malformed output structurally impossible, ensuring the integrity of the entire corpus without manual cleanup. By Week 5, this allows us to scale beyond the historical 2,000-row "Tier B" limit to the full dataset.
 
 ### The `retrieval_text` Construction
 
@@ -796,32 +794,29 @@ The preprocessing pipeline that generates all artifacts runs as 21 notebook stag
 | Stage | Purpose | Output |
 |---|---|---|
 | 1 | Setup: GPU tier detection, disk check, deps | GPU tier string (A100/L4/T4) |
-| 2–4 | Load raw CSV, tier selection | Tier A and Tier B DataFrames |
-| 5 | Embed Tier A raw text (Qwen3-Embedding-8B) | `fragrance_raw_full/embeddings.npy` (35889 × 1024) |
-| 6 | Load enrichment LLM (Qwen3.5-27B or Gemini fallback) | LLM client in memory |
+| 2–4 | Load and preprocess full 35,889-row corpus | `vibescent_enriched.csv` DataFrame |
+| 5 | Embed corpus text (Qwen3-VL-Embedding-8B) | `artifacts/qwen3vl_corpus/embeddings.npy` (35889 × 4096) |
+| 6 | Load enrichment LLM (Qwen3-8B or Gemini fallback) | LLM client in memory |
 | 7 | Smoke test enrichment (single row) | Pass/fail gate |
-| 8 | Enrich Tier C (500-row sample) | `vibescent_enriched_500.csv` |
-| 9 | Retrieval comparison (Tier A raw baseline) | Evaluation report |
-| 10 | Enrich Tier B (2,000 rows) | `vibescent_enriched_2k.csv` |
-| 11 | Rebuild `retrieval_text` for enriched tiers | Updated DataFrames |
+| 8–10 | Enrich full 35,889-row corpus | `vibescent_enriched_full.csv` |
+| 11 | Rebuild `retrieval_text` for enriched corpus | Updated DataFrames |
 | 12 | Generate `display_text` (optional) | Skipped in production runs |
-| 13–14 | Embed enriched tiers (Qwen3-Embedding-8B) | `fragrance_enriched_500/`, `fragrance_enriched_2k/` |
-| 15 | RAW vs ENRICHED retrieval comparison | Quality validation report |
+| 13–15 | Quality validation: raw vs enriched comparison | Quality validation report |
 | 16 | Multimodal query probes (text-only queries) | Baseline similarity matrices |
-| 17 | Embed Tier B documents multimodally (Qwen3-VL) | `multimodal_2k/doc_embeddings.npy` (2000 × 1024) |
+| 17 | Embed documents multimodally (Qwen3-VL) | Part of unified unified matrix |
 | 18 | Multimodal query probes (text + image queries) | Quality validation report |
 | 19 | Embedding sanity checks (variance test) | Pass/fail gate |
-| 20 | Report writer | `results/week2_report.md` sections |
-| 21 | Triple artifact sink (parallel copy) | Artifacts on Drive + local + backup |
+| 20 | Report writer | `results/week5_report.md` sections |
+| 21 | Artifact sink: final 4096-d unified matrix | `embeddings.npy` (35889 × 4096) |
 
-**Week 5 update — superseded by Stage 0 of `harsh_week5_qwen3vl.ipynb`:** the active inference corpus is `artifacts/qwen3vl_corpus/embeddings.npy` (35,889 × 4096), generated by Qwen3-VL-Embedding-8B at full dimension. The 21-stage notebook artifacts (`fragrance_raw_full/`, `multimodal_2k/`) are historical — `VibeScoreEngine` no longer loads them. The Week 5 notebook also validates the full pipeline end-to-end on Colab for coursework submission; it does not produce new artifacts that the backend needs.
+**Week 5 implementation:** the active inference corpus is `artifacts/qwen3vl_corpus/embeddings.npy` (35,889 × 4096), generated by Qwen3-VL-Embedding-8B at full dimension. This single unified matrix serves both text and multimodal retrieval channels. All 35,889 fragrances in the dataset carry full enrichment metadata, eliminating the historical "Tier B" quality gap.
 
 **Stage gate mechanism:** each expensive stage (embedding, enrichment) writes a `manifest.json` on completion. `stage_complete(stage_id, artifacts_dir, pipeline_version)` checks for this manifest and skips the stage if it exists. Re-running the notebook after a crash resumes from the last completed stage without re-embedding.
 
 **GPU tier routing:** GPU VRAM detection at Stage 1 determines which stages run:
-- A100 (≥35 GB): all 21 stages run at full capacity
+- A100 (≥35 GB): all stages run at full capacity
 - L4 (≥20 GB): Qwen3-VL embedding runs, but at smaller batch sizes
-- T4 (<20 GB): multimodal embedding is skipped (Stage 17 no-ops); enrichment falls back to Gemini API; only Tier C (500 rows) is enriched
+- T4 (<20 GB): multimodal embedding is skipped (Stage 17 no-ops); enrichment falls back to Gemini API
 
 **Checkpoint-based recovery:** `embed_corpus()` writes partial embedding matrices every 100 batches. On crash, `embed_corpus_resume()` globs for checkpoint files, concatenates them in order, and returns the partial result with the next batch index. This prevents losing hours of GPU work to Colab disconnects.
 
@@ -970,9 +965,9 @@ These fields feed three different downstream consumers:
 
 ## Known Gaps and Limitations
 
-### Tier A Coverage Without Enrichment (by design)
+### Model Load Latency (Inference)
 
-33,889 fragrances have no enrichment attributes. They are reachable only via raw text similarity. Niche fragrances outside the top 2,000 by rating count compete at a significant disadvantage.
+Loading two 8B models (Qwen3-VL-Embedding and Qwen3-VL-Reranker) plus CLIP ViT-L/14 into VRAM takes ~45–90 seconds. While once loaded inference is fast, the initial server boot time is a bottleneck in short-lived environments.
 
 ### CLIP Classifier Calibration
 
@@ -1132,8 +1127,8 @@ Equal weights are the maximally uninformed prior — they assume all signals are
 
 - Text (0.30): covers 35,889 fragrances — the only signal with full corpus coverage. High weight because it is the primary retrieval signal for most queries.
 - Image CLIP (0.30): the only signal that reads the outfit's visual attributes explicitly. Equal to text because visual information and textual information are the two primary modalities.
-- Multimodal (0.25): covers both modalities simultaneously but operates only on 2,000 fragrances and partially overlaps with text. Slightly lower weight to avoid double-counting the text signal that both branches share.
-- Structured (0.15): lowest weight because it only reaches the enriched Tier B corpus (no full-corpus coverage), though the signal is high-quality (ground-truth LLM attribute values, fully query-aware).
+- Multimodal (0.25): covers both modalities simultaneously across the **full 35,889-row corpus** but partially overlaps with the text branch signal. Slightly lower weight to avoid double-counting the shared text component.
+- Structured (0.15): lower weight because it relies on deterministic attribute arithmetic rather than semantic embedding, though the signal is high-quality and **fully query-aware**. It now covers the **full 35,889-row enriched corpus**.
 
 Equal weights (0.25 each) are used as the safe fallback when `best_weights.json` is missing.
 
@@ -1223,7 +1218,7 @@ Neil's model uses ResNet-50 for the convolutional backbone. The reasons are prag
 
 4. **The bottleneck is CLIP, not the CNN.** The CLIP ViT-L/14 features (768-d) carry most of the semantic load. ResNet-50 (2048-d spatial features) adds texture and structure details. Even a weaker CNN backbone would contribute meaningfully to the fusion — the absolute quality of the ResNet features matters less than the qualitative difference they add on top of CLIP.
 
-**Q: Why Qwen3.5-27B for enrichment instead of a much smaller model (Llama-3-8B, Mistral-7B)?**
+**Q: Why Qwen3-8B for enrichment instead of a much smaller model (Llama-3-8B, Mistral-7B)?**
 
 Enrichment requires domain expertise: the model must correctly infer `formality=0.88` for BR540 vs `formality=0.22` for a beachy aquatic. This is not a task that can be solved by pattern matching on training data — it requires understanding of cultural fragrance norms, occasion dressing conventions, and sensory-to-conceptual translation.
 
@@ -1303,32 +1298,20 @@ Truncating to 70% of the original prompt sacrifices: the least important fields 
 
 ---
 
-### Corpus and Tier Design
+### Corpus and Enrichment Design
 
-**Q: Why select Tier B by `rating_count` instead of review richness, metadata completeness, or random sampling?**
+**Q: Why enrich the full 35,889-row corpus instead of just a high-quality subset?**
 
-`rating_count` is a proxy for **documentation quality**. A fragrance with 50,000 ratings on Fragrantica has been extensively reviewed and is culturally well-known. Its notes list is likely complete, its accords are validated by many reviewers, and there is substantial cultural writing about it that the enrichment LLM has likely seen during training. An LLM enriching a well-known fragrance produces more accurate results because it has prior knowledge from its training data.
+In Week 4, the system only enriched the top 2,000 fragrances ("Tier B"). In Week 5, we scaled to the full 35,889-row dataset. This eliminates the **coverage gap** where niche or obscure fragrances were reachable only via raw text search. By enriching everything:
+- **Consistent Signal:** Every fragrance now carries the same 12 enriched semantic attributes (formality, vibe, character tags, etc.).
+- **Long-tail Discovery:** A user with a highly specific aesthetic can now find the "perfect" match among 35k fragrances with the same precision as they would for a global bestseller.
+- **Fair Comparison:** All four scoring channels (Text, Multimodal, Image, Structured) now operate over the entire database, preventing "popularity bias" where the system would only recommend well-known scents because they were the only ones with rich features.
 
-A fragrance with 23 ratings may have incomplete notes, uncertain classification, and little cultural writing — the LLM is essentially guessing. Random sampling would mix high- and low-documentation fragrances, degrading the average enrichment quality.
+**Q: Why was `rating_count` originally used to define "Tier B"?**
 
-`metadata_completeness` was the secondary criterion: all four note columns must be non-null (strict filter) because `retrieval_text` without heart and base notes loses important signal. High `rating_count` + complete metadata = best candidates for enrichment.
+`rating_count` is a proxy for **documentation quality**. A fragrance with 50,000 ratings has been extensively reviewed and is culturally well-known. Its notes list is likely complete, and there is substantial cultural writing about it that the enrichment LLM has likely seen during training. This ensured high-quality "seed" data during early development. While we now enrich all 35k rows, `rating_count` remains a useful metadata field for sorting and filtering.
 
-**Q: Why 2,000 for Tier B specifically? Why not 5,000 or 500?**
-
-- **Enrichment cost:** 2,000 rows × ~1-2s per LLM call = 33-67 minutes on Qwen3.5-27B or Gemini. 5,000 rows would be 2.5-5 hours — acceptable but risks Colab session timeouts. 2,000 is inside a reliable single-session budget.
-- **Multimodal embedding cost:** Qwen3-VL embedding at batch_size=16 on A100. 2,000 rows ≈ 125 batches ≈ 20-30 minutes. 5,000 rows would be 50-75 minutes — still feasible but pushing the session limit with all other stages.
-- **Coverage vs. quality:** the top 2,000 by rating count covers virtually all fragrances a user would plausibly know or want. Fragrances ranked 2,001–5,000 are progressively more obscure. The marginal retrieval improvement from adding them to the enriched corpus is likely small.
-- **500 is too few:** the 20-case benchmark requires sufficient diversity in the candidate pool. A 500-fragrance enriched corpus may not contain good matches for all 20 benchmark occasions.
-
-**Q: Why keep the full 35K Tier A raw corpus instead of just enriching everything you can?**
-
-Tier A serves as a **long-tail coverage net**. A user wearing a very specific aesthetic (early 1990s French niche, Japanese wabi-sabi minimalism) may have a perfect match in fragrance #8,000 by rating count. If Tier A didn't exist, that fragrance would be invisible. It competes at a disadvantage (text-only, no enrichment) but it can still be retrieved.
-
-The alternative — "only index what you've enriched" — would limit the system to 2,000 fragrances. This is a serious limitation for a portfolio demo trying to show broad fragrance knowledge.
-
-The design says: use Tier B for quality, use Tier A for coverage. The two serve different user needs.
-
-**Q: Why require `top_notes`, `middle_notes`, `base_notes`, AND `main_accords` for strict Tier B inclusion?**
+**Q: Why require `top_notes`, `middle_notes`, `base_notes`, AND `main_accords` for the best retrieval quality?**
 
 The `retrieval_text` construction pipeline uses all four:
 ```
@@ -1337,34 +1320,26 @@ Accords: {main_accords}
 ```
 Missing `base_notes` means the fragrance's dry-down — often its most distinctive phase — is absent from the embedding. Missing `main_accords` removes the highest-level semantic clustering signal. Either omission degrades the retrieval text enough to affect embedding quality.
 
-The fallback filter (relax to just `top_notes` + `main_accords`) exists because some legitimate fragrances don't have published middle/base note breakdowns (e.g. single-material soliflores like certain pure oud extracts). The strict filter is preferred; relaxation is a safety valve.
-
 ---
 
 ### Scoring Mathematics
 
 **Q: Why is cosine similarity the right distance metric instead of L2 (Euclidean) or dot product?**
 
-For embeddings, three options:
+For embeddings, cosine similarity is the standard because it measures only the angle between vectors, ignoring magnitude. Semantically similar texts should point in the same direction in embedding space regardless of their "length" (which can be biased by word count).
 
-1. **Dot product:** `a · b`. Problematic because it depends on both the angle between vectors AND their magnitudes. A long vector will have high dot product similarity with everything, even semantically unrelated content. Embedding models trained with L2 normalization (like Qwen3) produce unit vectors — at unit length, dot product equals cosine similarity. For non-normalized vectors, dot product is problematic.
-
-2. **L2 distance:** `||a - b||`. Works for nearest-neighbor search but conflates magnitude differences with semantic differences. Two fragrance embeddings that encode similar meaning but are scaled differently would appear far apart. Also, argmin(L2) ≠ argmax(dot product) for non-normalized vectors.
-
-3. **Cosine similarity:** `(a · b) / (||a|| × ||b||)`. Measures only the angle between vectors, ignoring magnitude. Semantically similar texts should point in the same direction in embedding space regardless of magnitude. This is the standard for text retrieval because embedding model training maximizes cosine similarity for semantically related pairs.
-
-The pipeline L2-normalizes all embeddings before storage (`normalize_rows()` in `similarity.py`). For unit vectors: `cos(θ) = a · b` exactly. So the matrix multiply `TEXT_EMBEDDINGS @ q.T` computes cosine similarity without the division. This is O(N × D) — optimal.
+The pipeline L2-normalizes all embeddings before storage (`normalize_rows()` in `similarity.py`). For unit vectors: `cos(θ) = a · b` exactly. This allows the matrix multiply `TEXT_EMBEDDINGS @ q.T` to compute cosine similarity instantly. For a 35,889 × 4096 matrix, this is ~147M floating-point multiply-accumulate operations — fast on any modern CPU or GPU.
 
 **Q: Why did Week 4 truncate to 1024-d, and why did Week 5 switch to full 4096-d?**
 
-**Week 4 rationale for truncation:**
-1. **Cross-model compatibility workaround.** Text branch used Qwen3-Embedding-8B; multimodal branch used Qwen3-VL-Embedding-8B. Different model families → different embedding spaces. Truncating both to 1024-d via Matryoshka prefix gave a common dimensionality — but cosine similarity across two different embedding spaces is geometrically meaningless regardless of shared dimensionality. It was a workaround, not a solution.
-2. **Memory.** 35,889 × 4096 × 4 bytes ≈ 560 MB. At 1024-d: 140 MB. The smaller footprint mattered on T4 (15 GB VRAM shared with two 8B models).
+**Week 4 rationale for truncation (Legacy):**
+1. **Cross-model compatibility workaround.** Text branch used Qwen3-Embedding-8B; multimodal branch used Qwen3-VL-Embedding-8B. Truncating both to 1024-d via Matryoshka prefix was a workaround for their different dimensionality, though not a true semantic bridge.
+2. **Memory.** 35,889 × 1024-d saved 4× memory, which mattered on low-VRAM T4 GPUs.
 
-**Week 5 rationale for full 4096-d:**
-1. **Single model eliminates the mismatch.** Qwen3-VL-Embedding-8B is now the sole embedding model. Text queries, multimodal queries, and corpus documents all come from the same model. There is no cross-model mismatch to bridge — the common-dimensionality workaround is no longer needed.
-2. **Quality at full dimension.** Matryoshka truncation to 1024-d is a capability, not a recommendation. Full 4096-d captures the complete learned representation. For retrieval over a 35K corpus, additional precision in embedding space helps distinguish fragrances with similar high-level accord profiles but different character.
-3. **Memory is acceptable on A100 80 GB.** 560 MB for the corpus matrix is well within budget when the GPU has 80 GB. On T4 (15 GB), the corpus + two 8B models would exhaust available VRAM — T4 is not a supported inference target for Week 5.
+**Week 5 rationale for full 4096-d (Current):**
+1. **Single model eliminates the mismatch.** Qwen3-VL-Embedding-8B is now the sole model for both text and multimodal queries. There is no cross-model mismatch to bridge.
+2. **Quality at full dimension.** Full 4096-d captures the complete learned representation of the 8B model. For retrieval over 35K rows, additional precision helps distinguish fragrances with subtle differences in character.
+3. **Hardware availability.** Memory is acceptable on A100/L4 GPUs. 560 MB for the corpus matrix is well within budget.
 
 The L2 normalization note on the matrix multiply: for 35,889 × 4096 at float32, a single dot product query costs ~147M multiply-accumulates — still fast in a single BLAS call (~5 ms on A100).
 
