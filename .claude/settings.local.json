@@ -185,7 +185,15 @@
       "Read(///wsl.localhost/Ubuntu/home/bossman/projects/vibescent/src/**)",
       "Bash(.venv/bin/pip show *)",
       "Bash(xargs basename *)",
-      "Bash(gh release *)"
+      "Bash(gh release *)",
+      "Bash(./node_modules/.bin/next build *)",
+      "Bash(node node_modules/next/dist/bin/next build)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/tailwindcss/package.json'\\).version\\)\")",
+      "Bash(node *)",
+      "Read(///wsl.localhost/Ubuntu/home/bossman/.nvm/versions/**)",
+      "Read(//c/Users/007ha/.nvm/versions/**)",
+      "Read(///wsl.localhost/Ubuntu/usr/**)",
+      "Bash(wsl.exe *)"
     ]
   }
 }

@@ -44,6 +44,10 @@ def search_perfume(name: str, budget: float) -> list[dict]:
         if price is None or price > budget:
             continue
 
+        thumbnail_url = item.get("thumbnail", "")
+        if thumbnail_url:
+            thumbnail_url = re.sub(r'\._[^.]*_\.', '.', thumbnail_url)
+
         results.append(
             {
                 "name": name,
@@ -51,7 +55,7 @@ def search_perfume(name: str, budget: float) -> list[dict]:
                 "price": float(price),
                 "store": "Amazon",
                 "url": item.get("link_clean", ""),
-                "thumbnail": item.get("thumbnail", ""),
+                "thumbnail": thumbnail_url,
                 "asin": item.get("asin", ""),
                 "rating": item.get("rating"),
                 "reviews": item.get("reviews"),

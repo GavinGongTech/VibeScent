@@ -40,6 +40,7 @@ export default function FragranceCard({
             src={fragrance.thumbnail}
             alt={fragrance.name}
             className="object-contain w-full h-full max-h-62.5 p-4"
+            referrerPolicy="no-referrer"
           />
         ) : (
           <span className="font-sans text-xs tracking-widest text-muted uppercase">
