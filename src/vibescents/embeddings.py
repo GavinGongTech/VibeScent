@@ -87,6 +87,9 @@ class SentenceTransformerEmbedder:
     _QUERY_PREFIX = "search_query: "
     _DOC_PREFIX = "search_document: "
     _NOMIC_MODELS = {"nomic-ai/nomic-embed-text-v1.5", "nomic-ai/nomic-embed-text-v1"}
+    _MXBAI_MODELS = {"mixedbread-ai/mxbai-embed-large-v1"}
+    # mxbai uses a different query prefix
+    _MXBAI_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
     def __init__(
         self,
@@ -97,7 +100,8 @@ class SentenceTransformerEmbedder:
         from sentence_transformers import SentenceTransformer
 
         self._model_name = model_name
-        self._needs_prefix = model_name in self._NOMIC_MODELS
+        self._needs_nomic_prefix = model_name in self._NOMIC_MODELS
+        self._needs_mxbai_prefix = model_name in self._MXBAI_MODELS
         self._model = SentenceTransformer(
             model_name, trust_remote_code=True, device=device
         )
@@ -112,8 +116,9 @@ class SentenceTransformerEmbedder:
         text_list = list(texts)
         if not text_list:
             return np.empty((0, 0), dtype=np.float32)
-        if self._needs_prefix:
+        if self._needs_nomic_prefix:
             text_list = [self._DOC_PREFIX + t for t in text_list]
+        # mxbai documents are embedded plain (no prefix needed for corpus)
         return self._model.encode(
             text_list,
             batch_size=batch_size or 256,
@@ -124,7 +129,65 @@ class SentenceTransformerEmbedder:
     def embed_multimodal_query(
         self, *, text: str, image_path=None, **_kwargs
     ) -> np.ndarray:
-        raise NotImplementedError(
-            "SentenceTransformerEmbedder is text-only. "
-            "Multimodal channel will be skipped automatically."
+        query = text
+        if self._needs_nomic_prefix:
+            query = self._QUERY_PREFIX + text
+        elif self._needs_mxbai_prefix:
+            query = self._MXBAI_QUERY_PREFIX + text
+        vec = self._model.encode(
+            [query], normalize_embeddings=True
+        ).astype(np.float32)
+        return vec
+
+class NvidiaNIMEmbedder:
+    """CPU-friendly text embedder via Nvidia NIM API (build.nvidia.com).
+
+    Uses nvidia/nv-embed-v1 to embed text. 
+    Note: text-only — outfit images are not embedded, multimodal channel is disabled.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "nvidia/nv-embed-v1",
+        **_kwargs,
+    ) -> None:
+        import os
+        from openai import OpenAI
+        import logging
+
+        self._model_name = model_name
+        api_key = os.environ.get("NVIDIA_API_KEY", "")
+        if not api_key:
+            logging.getLogger(__name__).warning("NVIDIA_API_KEY not set. Embedding will fail.")
+        
+        self.client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key
         )
+
+    def embed_multimodal_documents(
+        self,
+        texts: Iterable[str],
+        *,
+        batch_size: int | None = None,
+        **_kwargs,
+    ) -> np.ndarray:
+        text_list = list(texts)
+        if not text_list:
+            return np.empty((0, 0), dtype=np.float32)
+        
+        # Batching handled automatically by list passing
+        resp = self.client.embeddings.create(
+            input=text_list,
+            model=self._model_name,
+            encoding_format="float",
+            extra_body={"input_type": "query", "truncate": "NONE"}
+        )
+        emb_batch = [data.embedding for data in resp.data]
+        return np.array(emb_batch, dtype=np.float32)
+
+    def embed_multimodal_query(
+        self, *, text: str, image_path=None, **_kwargs
+    ) -> np.ndarray:
+        # Wrap query in list to use the same bulk method
+        return self.embed_multimodal_documents([text])

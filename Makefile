@@ -1,7 +1,7 @@
 .PHONY: install test lint format typecheck clean week2-preflight
 
 install:
-	uv sync --extra dev
+	uv sync --all-extras
 	bun install
 
 test:

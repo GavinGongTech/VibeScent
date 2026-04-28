@@ -96,9 +96,14 @@ export default function DemoPage() {
 
           <div className="pt-4">
             {error && (
-              <p className="font-mono text-xs tracking-wide text-bg bg-gold px-3 py-2 rounded-sm mb-4 text-center">
-                {error}
-              </p>
+              <div className="mb-4 rounded-sm border border-red-800/40 bg-red-950/30 px-4 py-3">
+                <p className="font-mono text-xs font-semibold tracking-wide text-red-400 mb-1 flex items-center gap-2">
+                  <span>⚠</span> Error
+                </p>
+                <p className="font-mono text-xs text-red-300/80 whitespace-pre-line leading-relaxed">
+                  {error}
+                </p>
+              </div>
             )}
             <SubmitButton
               onClick={handleSubmit}

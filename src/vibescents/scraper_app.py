@@ -29,7 +29,7 @@ def search(req: SearchRequest) -> list[dict]:
 
         clean_results = []
         for i, res in enumerate(raw_results):
-            if res is None:
+            if not res:
                 clean_results.append(
                     {
                         "name": req.perfumes[i],
@@ -37,10 +37,22 @@ def search(req: SearchRequest) -> list[dict]:
                         "store": "Unavailable",
                         "purchaseUrl": "#",
                         "thumbnail": None,
+                        "in_budget": False,
                     }
                 )
             else:
-                clean_results.append({**res, "name": req.perfumes[i]})
+                # res is list[dict] (top 3 matches) — take the best one
+                best = res[0]
+                clean_results.append({
+                    "name": req.perfumes[i],
+                    "price": best.get("price"),
+                    "store": best.get("store", "Amazon"),
+                    "url": best.get("url", "#"),
+                    "thumbnail": best.get("thumbnail"),
+                    "in_budget": best.get("in_budget", True),
+                    "rating": best.get("rating"),
+                    "title": best.get("title", ""),
+                })
 
         print(f"[scraper] Returning {len(clean_results)} results")
         return clean_results

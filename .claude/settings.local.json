@@ -184,7 +184,8 @@
       "Read(///wsl.localhost/Ubuntu/home/bossman/projects/vibescent/docs/**)",
       "Read(///wsl.localhost/Ubuntu/home/bossman/projects/vibescent/src/**)",
       "Bash(.venv/bin/pip show *)",
-      "Bash(xargs basename *)"
+      "Bash(xargs basename *)",
+      "Bash(gh release *)"
     ]
   }
 }

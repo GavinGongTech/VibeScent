@@ -395,7 +395,7 @@ class CLIPImageScorer:
 
         img = (
             __import__("PIL.Image", fromlist=["Image"])
-            .Image.open(BytesIO(image_bytes))
+            .open(BytesIO(image_bytes))
             .convert("RGB")
         )
         inputs = self._processor(images=img, return_tensors="pt").to(self._device)
@@ -426,4 +426,8 @@ class CLIPImageScorer:
         ).to(self._device)
         with self._torch.no_grad():
             embs = self._model.get_text_features(**inputs)
+            # Newer transformers versions may return a structured output object
+            # instead of a plain tensor — unwrap it if so.
+            if not isinstance(embs, self._torch.Tensor):
+                embs = embs.pooler_output if hasattr(embs, "pooler_output") else embs.last_hidden_state[:, 0]
             return F.normalize(embs, dim=-1)  # (N, D)

@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
         mimeType: body.mimeType,
         context: body.context,
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(120_000),  // 120s — embedder warm-up + NIM reranking takes time
     });
 
     if (!mlResponse.ok) {
@@ -79,29 +79,39 @@ export async function POST(req: NextRequest) {
     console.log(
       `Calling Scraper API at ${SCRAPER_BACKEND_URL}/search with budget $${budgetCap}...`,
     );
-    const scraperResponse = await fetch(`${SCRAPER_BACKEND_URL}/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        perfumes: perfumeNames,
-        budget: budgetCap,
-      }),
-      signal: AbortSignal.timeout(10_000),
-    });
+    
+    let scraperResult = null;
+    try {
+      const scraperResponse = await fetch(`${SCRAPER_BACKEND_URL}/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          perfumes: perfumeNames,
+          budget: budgetCap,
+        }),
+        signal: AbortSignal.timeout(60_000), // Increased to 60s for SerpAPI
+      });
 
-    if (!scraperResponse.ok) {
-      const scraperErrorText = await scraperResponse.text();
-      console.warn(
-        `Scraper failed (${scraperResponse.status}): ${scraperErrorText}`,
-      );
+      if (!scraperResponse.ok) {
+        const scraperErrorText = await scraperResponse.text();
+        console.warn(
+          `Scraper failed (${scraperResponse.status}): ${scraperErrorText}`,
+        );
+      } else {
+        scraperResult = await scraperResponse.json();
+        console.log(
+          `Scraper returned data for ${scraperResult?.length || 0} items.`,
+        );
+      }
+    } catch (scraperErr) {
+      console.warn("Scraper fetch failed or timed out:", scraperErr);
+      // We continue with ML results even if scraper times out
+    }
+
+    if (!scraperResult) {
       console.warn("Returning ML results without pricing.");
       return NextResponse.json(mlResult);
     }
-
-    const scraperResult = await scraperResponse.json();
-    console.log(
-      `Scraper returned data for ${scraperResult?.length || 0} items.`,
-    );
 
     // 3. Merge scraper pricing data into ML results
     const finalRecommendations = mlResult.recommendations.map((frag, index) => {
@@ -123,11 +133,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ recommendations: finalRecommendations });
   } catch (error) {
     console.error("API Route Error:", error);
+
+    // Surface the real error so users/devs understand what went wrong
+    let message = "An unexpected error occurred.";
+    let hint = "";
+
+    if (error instanceof Error) {
+      if (error.name === "TimeoutError" || error.name === "AbortError") {
+        message = "The ML backend took too long to respond (>120s).";
+        hint = "This usually happens on first request while the embedder model warms up. Try again in a few seconds.";
+      } else if (error.message.includes("ECONNREFUSED") || error.message.includes("fetch failed")) {
+        message = "Cannot connect to the ML backend at " + ML_BACKEND_URL + ".";
+        hint = "Make sure the backend is running: run `bun run dev` in your project folder.";
+      } else {
+        message = error.message;
+      }
+
+    }
+
     return NextResponse.json(
-      {
-        error:
-          "Model backend unavailable or encountered an error. Please ensure the ML server is running and check the logs.",
-      },
+      { error: message, hint },
       { status: 503 },
     );
   }

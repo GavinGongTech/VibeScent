@@ -16,10 +16,11 @@ export async function getRecommendations(
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as {
       error?: string;
+      hint?: string;
     };
-    throw new Error(
-      body.error ?? "Failed to curate fragrance. Please try again.",
-    );
+    const msg = body.error ?? "Failed to curate fragrance. Please try again.";
+    const hint = body.hint ? `\n\nHint: ${body.hint}` : "";
+    throw new Error(msg + hint);
   }
 
   return response.json();

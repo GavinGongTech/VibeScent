@@ -9,7 +9,7 @@ import pandas as pd
 
 from vibescents.bm25_scorer import BM25CorpusScorer
 from vibescents.embeddings import Qwen3VLMultimodalEmbedder
-from vibescents.fusion import fuse_scores, min_max_normalize
+from vibescents.fusion import fuse_scores, min_max_normalize, DEFAULT_FUSION_WEIGHTS
 from vibescents.image_scoring import (
     CLIPImageScorer,
     GENDER_INDEX,
@@ -37,11 +37,6 @@ from vibescents.structured_scorer import compute_structured_scores
 logger = logging.getLogger(__name__)
 
 _SEASON_INDEX: dict[str, int] = {"spring": 0, "summer": 1, "fall": 2, "winter": 3}
-
-_FULL_WEIGHTS = {"text": 0.30, "multimodal": 0.25, "image": 0.30, "structured": 0.15}
-_NO_IMAGE_WEIGHTS = {"text": 0.40, "multimodal": 0.35, "structured": 0.25}
-_NO_MULTI_WEIGHTS = {"text": 0.45, "image": 0.40, "structured": 0.15}
-_TEXT_ONLY_WEIGHTS = {"text": 0.80, "structured": 0.20}
 
 
 class VibeScoreEngine:
@@ -149,28 +144,17 @@ class VibeScoreEngine:
             except Exception as exc:
                 logger.warning("Text embedding failed, skipping text channel: %s", exc)
 
-        # Multimodal channel — Qwen3-VL-Embedding-8B sees image + context text natively
-        multi_scores: np.ndarray | None = None
         _rerank_image = None
-        if embedder is not None and image_bytes:
+        if image_bytes:
+            import os as _os
+            import tempfile as _tmf
             try:
-                import os as _os
-                import tempfile as _tmf
-
-                _tmp = None
-                try:
-                    with _tmf.NamedTemporaryFile(suffix=".jpg", delete=False) as _f:
-                        _tmp = _f.name
-                        _f.write(image_bytes)
-                    mm_emb = embedder.embed_multimodal_query(
-                        text=query_str, image_path=_tmp
-                    )
-                    mm_emb = normalize_rows(mm_emb.astype(np.float32))
-                    multi_scores = cosine_similarity_matrix(mm_emb, self._corpus_emb)[0]
-                finally:
-                    _rerank_image = _tmp
+                with _tmf.NamedTemporaryFile(suffix=".jpg", delete=False) as _f:
+                    _tmp = _f.name
+                    _f.write(image_bytes)
+                _rerank_image = _tmp
             except Exception as exc:
-                logger.warning("Multimodal embedding failed, skipping channel: %s", exc)
+                logger.warning("Failed to save temporary image for reranking: %s", exc)
 
         # Image channel — CLIP zero-shot
         image_scores: np.ndarray | None = None
@@ -183,7 +167,7 @@ class VibeScoreEngine:
         # Structured channel — arithmetic match, never fails
         structured_scores = compute_structured_scores(request.context, self._corpus_df)
 
-        fused = self._fuse(text_scores, multi_scores, image_scores, structured_scores)
+        fused = self._fuse(text_scores, None, image_scores, structured_scores)
 
         # Apply hard filter — zero out excluded rows BEFORE top_k selection
         filter_mask = self._hard_filter(request.context)
@@ -200,13 +184,16 @@ class VibeScoreEngine:
         retrieval_k = min(20, len(self._corpus_df))
         top_k_arr = top_k_indices(fused_filtered, retrieval_k)
 
+        rerank_results = None
         try:
-            top3_indices = self._try_rerank(top_k_arr, query_str, _rerank_image)
-            if top3_indices is None:
+            rerank_results = self._try_rerank(top_k_arr, query_str, _rerank_image)
+            if rerank_results is None:
                 if q_emb is not None:
                     top3_indices = mmr_select(q_emb[0], self._corpus_emb, top_k_arr, top_k=3)
                 else:
                     top3_indices = top_k_arr[:3]
+            else:
+                top3_indices = np.array([int(r.fragrance_id) for r in rerank_results], dtype=int)
         finally:
             if _rerank_image is not None:
                 try:
@@ -215,7 +202,7 @@ class VibeScoreEngine:
                 except OSError:
                     pass
 
-        return self._build_response(top3_indices, fused, request.context)
+        return self._build_response(top3_indices, fused, request.context, rerank_results)
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -256,7 +243,7 @@ class VibeScoreEngine:
             return np.ones(len(self._corpus_df), dtype=bool)
         return mask
 
-    def _try_rerank(self, top_k_arr: np.ndarray, query_str: str, image_path: str | None) -> np.ndarray | None:
+    def _try_rerank(self, top_k_arr: np.ndarray, query_str: str, image_path: str | None) -> list | None:
         reranker = self._get_reranker()
         if reranker is None:
             return None
@@ -269,7 +256,7 @@ class VibeScoreEngine:
                 for idx in top_k_arr
             ]
             resp = reranker.rerank(occasion_text=query_str, candidates=candidates, image_path=image_path)
-            return np.array([int(r.fragrance_id) for r in resp.results[:3]], dtype=int)
+            return resp.results[:3]
         except Exception as exc:
             logger.warning('Rerank call failed: %s', exc)
             return None
@@ -281,33 +268,18 @@ class VibeScoreEngine:
             with self._embedder_lock:
                 if self._embedder is None:
                     try:
-                        self._embedder = Qwen3VLMultimodalEmbedder(self._settings)
+                        from vibescents.embeddings import SentenceTransformerEmbedder
+                        
+                        _MINILM_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+                        self._embedder = SentenceTransformerEmbedder(_MINILM_MODEL)
                         logger.info(
-                            "Using Qwen3-VL-Embedding-8B (GPU mode, full 4-channel scoring)"
+                            "Using %s (CPU mode, multimodal channel disabled)",
+                            _MINILM_MODEL,
                         )
                     except Exception as exc:
-                        logger.warning(
-                            "Qwen3-VL unavailable (%s), trying CPU fallback...", exc
-                        )
-                        try:
-                            from vibescents.embeddings import (
-                                SentenceTransformerEmbedder,
-                            )
-
-                            self._embedder = SentenceTransformerEmbedder(
-                                self._settings.text_embedding_model
-                            )
-                            logger.info(
-                                "Using %s (CPU mode, multimodal channel disabled)",
-                                self._settings.text_embedding_model,
-                            )
-                        except Exception as exc2:
-                            logger.warning(
-                                "CPU embedder also unavailable (%s), text channel disabled",
-                                exc2,
-                            )
-                            self._embedder = self._EMBEDDER_UNAVAILABLE
-                            return None
+                        logger.warning("Embedder unavailable: %s", exc)
+                        self._embedder = self._EMBEDDER_UNAVAILABLE
+                        return None
         return self._embedder  # type: ignore[return-value]
 
     def _get_clip(self) -> CLIPImageScorer:
@@ -399,45 +371,45 @@ class VibeScoreEngine:
         image: np.ndarray | None,
         structured: np.ndarray,
     ) -> np.ndarray:
-        if text is not None and multi is not None and image is not None:
-            return fuse_scores(
-                {
-                    "text": text,
-                    "multimodal": multi,
-                    "image": image,
-                    "structured": structured,
-                },
-                weights=_FULL_WEIGHTS,
-            )
-        if text is not None and multi is not None:
-            return fuse_scores(
-                {"text": text, "multimodal": multi, "structured": structured},
-                weights=_NO_IMAGE_WEIGHTS,
-            )
-        if text is not None and image is not None:
-            return fuse_scores(
-                {"text": text, "image": image, "structured": structured},
-                weights=_NO_MULTI_WEIGHTS,
-            )
+        # Build dynamic weights dict based on what signals are available,
+        # scaling up available signals to fill any missing weight gaps.
+        available = {"structured": structured}
+        weights = {"structured": DEFAULT_FUSION_WEIGHTS["structured"]}
+        
         if text is not None:
-            return fuse_scores(
-                {"text": text, "structured": structured}, weights=_TEXT_ONLY_WEIGHTS
-            )
+            available["text"] = text
+            weights["text"] = DEFAULT_FUSION_WEIGHTS["text"]
+            
         if image is not None:
-            return fuse_scores(
-                {"image": image, "structured": structured},
-                weights={"image": 0.70, "structured": 0.30},
-            )
-        return structured
+            available["image"] = image
+            weights["image"] = DEFAULT_FUSION_WEIGHTS["image"]
+            
+        # If multimodal were ever restored, it would fall back gracefully
+        if multi is not None:
+            available["multimodal"] = multi
+            weights["multimodal"] = 0.25
+            
+        # Normalize weights to sum to 1.0
+        total_w = sum(weights.values())
+        norm_weights = {k: v / total_w for k, v in weights.items()}
+        
+        return fuse_scores(available, weights=norm_weights)
 
     def _build_response(
         self,
         top_indices: np.ndarray,
         fused_scores: np.ndarray,
         ctx: ContextInput,
+        rerank_results: list | None = None,
     ) -> RecommendResponse:
         df = self._corpus_df
         recs: list[FragranceRecommendation] = []
+        
+        # Build map of reranker explanations if available
+        explanations = {}
+        if rerank_results is not None:
+            for r in rerank_results:
+                explanations[r.fragrance_id] = r.explanation
 
         for rank, idx in enumerate(top_indices, start=1):
             row = df.iloc[int(idx)]
@@ -447,10 +419,15 @@ class VibeScoreEngine:
             occasion = (
                 _str_or_none(row.get("likely_occasion")) or ctx.eventType or "Evening"
             )
-            reasoning = (
-                _str_or_none(row.get("vibe_sentence"))
-                or "A distinctive fragrance selected for your look."
-            )
+            
+            # Prefer reranker explanation, fallback to dataset vibe_sentence, fallback to default
+            frag_id = str(row.get("fragrance_id", ""))
+            reasoning = explanations.get(frag_id)
+            if not reasoning or "continuous batching" in reasoning:
+                reasoning = _str_or_none(row.get("vibe_sentence"))
+            if not reasoning:
+                reasoning = "A distinctive fragrance selected for your look."
+                
             recs.append(
                 FragranceRecommendation(
                     rank=rank,

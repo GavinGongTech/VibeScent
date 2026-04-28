@@ -7,10 +7,9 @@ from typing import Callable, Iterable, Mapping
 import numpy as np
 
 DEFAULT_FUSION_WEIGHTS: dict[str, float] = {
-    "text": 0.30,
-    "multimodal": 0.25,
-    "image": 0.30,
-    "structured": 0.15,
+    "text": 0.275,
+    "image": 0.450,
+    "structured": 0.275,
 }
 
 
