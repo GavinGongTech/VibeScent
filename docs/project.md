@@ -81,17 +81,13 @@ The pipeline has two phases: offline (runs once on GPU, takes hours) and online 
 
 Each row has: brand, name, top/middle/base notes, main accords, gender, concentration, rating count. This is what Fragrantica stores.
 
-**Step 2 — You select 2,000 fragrances for deep processing (Tier B).**
+**Step 2 — You enrich the full corpus of 35,889 fragrances.**
 
-You can't afford to run the expensive steps (LLM enrichment, multimodal embedding) on all 35,889 fragrances. You select the top 2,000 by `rating_count` with complete metadata. High rating count = well-documented, culturally known fragrances that the LLM enricher will have prior knowledge about. This is Tier B.
+In Week 5, we moved beyond the 2,000-fragrance "Tier B" limit. Every row in the dataset now undergoes LLM enrichment. While this takes several hours on a local GPU or via Batch API, it ensures that long-tail niche fragrances carry the same rich semantic signals as global bestsellers.
 
-Why 2,000 and not more? LLM enrichment at 2,000 rows takes ~35-65 minutes. Multimodal embedding at 2,000 rows takes ~20-30 minutes on A100. The pipeline fits inside a single Colab/Kaggle session. 5,000 rows would risk session timeouts and cost more. 2,000 is the practical ceiling for overnight preprocessing.
+**Step 3 — You translate fragrances from chemistry to experience vocabulary (Enrichment).**
 
-Why keep the remaining 33,889 (Tier A) at all? Coverage. Niche fragrances ranked #4,000 by popularity may be the perfect match for an unusual request. Tier A makes them reachable via text search, even if at lower quality.
-
-**Step 3 — You translate Tier B fragrances from chemistry to experience vocabulary (Enrichment).**
-
-For each of the 2,000 fragrances, an LLM (Qwen3.5-27B-GPTQ-Int4 locally, or Gemini flash as fallback) reads the raw metadata and generates:
+For each of the 35,889 fragrances, an LLM (Qwen3.5-27B-GPTQ-Int4 locally, or Gemini flash as fallback) reads the raw metadata and generates:
 
 ```
 formality: 0.88          (how dressed-up is this fragrance?)
@@ -291,7 +287,7 @@ The 20 candidates go to `Qwen3VLReranker` (Qwen3-VL-Reranker-8B, local GPU). The
 - The occasion query string
 - Each candidate's `build_candidate_text()` output: `"Name by Brand | vibe_sentence | Occasion: X | Notes: Y"`
 
-The reranker returns per-candidate `overall_score`, `formality_score`, `season_score`, `freshness_score`, and `explanation`. Top 3 by `overall_score` are selected.
+The reranker returns per-candidate `overall_score`, `formality_score`, `season_score`, `freshness_score`, and `explanation`. In the current pointwise implementation (`src/vibescents/reranker.py`), the model populates `formality_score`, `season_score`, and `freshness_score` by mirroring the `overall_score` (representing the model's confidence in the total match). Top 3 by `overall_score` are selected.
 
 If the reranker is unavailable (no GPU, load failure), MMR diversification runs instead:
 ```python
@@ -350,46 +346,21 @@ The retrieval + fusion approach achieves the same goal without labeled training 
 
 Retrieval is fundamentally a recall problem: find every fragrance that might be good. Reranking is a precision problem: from those candidates, find the best one. Optimizing for both simultaneously in a single model is hard. Separating retrieval (fast, recall-optimized, runs over 35K fragrances) from reranking (slower, precision-optimized, runs over 10 candidates) lets each component specialize.
 
-The reranker (Gemini 3.1 Pro) has far more compute budget per candidate than the retrieval system. It can reason holistically about the outfit image and the fragrance profile in a way that matrix multiply cannot. But it can't run on 35,889 candidates — the latency would be minutes. Running it on 10 candidates is ~2-5 seconds.
+The reranker (Qwen3-VL-Reranker-8B) has far more compute budget per candidate than the retrieval system. It can reason holistically about the outfit image and the fragrance profile in a way that matrix multiply cannot. But it can't run on 35,889 candidates — the latency would be minutes. Running it on 20 candidates is ~2-5 seconds.
 
 This is the standard two-stage retrieval architecture used in production search systems (dense retrieval → cross-encoder reranking). We've adapted it for multimodal fragrance retrieval.
 
 ---
 
-## Corpus Structure — The Tier System
+## Corpus Structure — Enrichment of the Full Dataset
 
-Before explaining retrieval, you need to understand how the fragrance data is organized. There are three tiers, and understanding which tier each branch operates on is essential to understanding the system's coverage/quality tradeoff.
+In Week 5, the "Tier" concept has evolved. While the dataset was originally split into Tiers to manage API costs, the entire 35,889-row corpus (`data/vibescent_enriched.csv`) has now been enriched with LLM-generated attributes and re-embedded.
 
-### Tier A — Full Corpus (35,889 fragrances)
+### The Full Enriched Corpus (35,889 fragrances)
 
-The raw Fragrantica dataset. Every fragrance in the database is in Tier A. It contains: brand, name, top/middle/base notes, main accords, gender, concentration, rating count.
+Every fragrance in the database now contains: brand, name, top/middle/base notes, main accords, gender, concentration, and all **LLM-enriched fields** (formality, vibe sentence, mood tags, season inference).
 
-**What it does NOT have:** any LLM-enriched fields. No formality score, no vibe sentence, no mood tags, no season inference. Just the raw chemistry vocabulary that Fragrantica stores.
-
-**Which branches can reach Tier A:** only the text branch. All other branches (multimodal, image, structured) operate exclusively on Tier B.
-
-**Why Tier A exists:** coverage. Recommending only the top 2,000 fragrances by rating count would systematically exclude niche houses and cult fragrances that might be the perfect match for an unusual outfit. Tier A ensures that any fragrance in the database is reachable, even if the retrieval signal quality is lower.
-
-### Tier B — Enriched Working Set (2,000 fragrances)
-
-The top 2,000 rows from Tier A selected by `rating_count` with complete metadata (all four note columns non-null). These are the well-documented, well-known fragrances that have the richest metadata for enrichment.
-
-Selection logic (`select_tier_b()` in `week2_pipeline.py`):
-1. **Strict filter**: require `top_notes`, `middle_notes`, `base_notes`, `main_accords` all non-null. Take top 2,000 by `rating_count`.
-2. **Fallback filter**: if strict yields <2,000, relax to require only `top_notes` and `main_accords`.
-3. **Hard minimum**: abort if relaxed filter yields <500 rows.
-
-Tier B fragrances go through the full enrichment pipeline (LLM generates `EnrichmentSchemaV2` fields), get re-embedded with enriched text, and get separately embedded with the multimodal model. All four scoring branches are active for Tier B.
-
-### Tier C — Development Sample (500 fragrances)
-
-A 500-row sample used exclusively for fast enrichment smoke testing and retrieval quality comparison during pipeline development. Not used in production inference. Lets you validate that enrichment works before committing to the full 2,000-row run.
-
-### The Coverage/Quality Tradeoff
-
-This tier system creates an explicit tradeoff: fragrance rank 2,001 by popularity is reachable only via the text branch on its raw retrieval_text. It competes for a top-K slot using only 30% of the fusion signal (the text weight), with the multimodal (25%), image (30%), and structured (15%) signals zeroed out. A top-100 Tier B fragrance competes with all four signals active.
-
-For a demo this is acceptable. For production, you'd want to enrich and multimodal-embed the full corpus — which would cost significantly more in GPU time and LLM API calls.
+**Why enrich everything?** Coverage. Recommending only the top 2,000 fragrances would systematically exclude niche houses. Week 5's scale-up ensures that any fragrance in the database is reachable with full signal quality. "Tier B" now refers legacy-wise to the high-priority subset used during development, but retrieval and fusion now run over the full enriched 35k rows.
 
 ---
 
@@ -421,7 +392,7 @@ The only way to connect them is to translate the fragrance from chemistry vocabu
 
 ### What Enrichment Does
 
-For every fragrance in Tier B, an LLM (Qwen3.5-27B-GPTQ-Int4 locally, or Gemini flash via API as fallback) receives the raw metadata as a prompt and acts as a fragrance expert:
+For every fragrance in the corpus, an LLM (Qwen3.5-27B-GPTQ-Int4 locally, or Gemini flash via API as fallback) receives the raw metadata as a prompt and acts as a fragrance expert:
 
 **Input prompt:**
 ```
@@ -785,15 +756,7 @@ The reranker is a research component — it does not replace the fusion baseline
 Plus the occasion query string and the outfit image temp file path.
 
 **Output schema:**
-```python
-class RerankResult(BaseModel):
-    fragrance_id:    str
-    overall_score:   float   # 0.0–1.0
-    formality_score: float
-    season_score:    float
-    freshness_score: float
-    explanation:     str     # 1–2 sentence rationale
-```
+The reranker returns a `RerankResult` containing `overall_score`, `formality_score`, `season_score`, `freshness_score`, and `explanation`. In the current Week 5 implementation, the model populates the three attribute scores by mirroring the `overall_score` (the model's confidence in the total match).
 
 **MMR fallback when reranker unavailable:**
 ```python
