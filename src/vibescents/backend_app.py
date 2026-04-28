@@ -87,6 +87,8 @@ def create_configured_app(settings: Any = None) -> Any:
 
     s = settings or Settings.from_env()
     engine = VibeScoreEngine.from_artifacts(settings=s)
+    engine._get_embedder()
+    engine._get_clip()
     return create_app(engine=engine)
 
 

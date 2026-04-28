@@ -28,9 +28,9 @@ uv run uvicorn "vibescents.backend_app:create_configured_app" \
   2>&1 | stdbuf -oL sed 's/^/[backend] /' &
 ML_PID=$!
 
-# Wait for backend to be ready (up to 30s — corpus load takes a few seconds)
+# Wait for backend to be ready (up to 90s — corpus load + CLIP + embedder warm-up)
 echo "Waiting for backend to be ready..."
-for i in $(seq 1 30); do
+for i in $(seq 1 90); do
   if curl -sf http://localhost:8000/healthz > /dev/null 2>&1; then
     echo "Backend ready."
     break
