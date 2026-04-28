@@ -21,7 +21,7 @@ The live system uses a 4-channel late fusion pipeline:
 |---------|------------------------|---------|
 | Text retrieval | Gemini `embedding-001` query vs Qwen3-Embedding-8B corpus | **Cross-space mismatch** |
 | Multimodal retrieval | Gemini Vision → text description → embed → vs Qwen corpus | **Two lossy steps + mismatch** |
-| Image classification | SigLIP 2 SO400M (needs GPU) | Currently bypassed on CPU |
+| Image classification | CLIP ViT-B/32 (needs GPU) | Currently bypassed on CPU |
 | LLM reranker | Gemini Pro (text-only) | Cannot see outfit image during reranking |
 
 The root problem is that the fragrance corpus (35k rows) was embedded offline with `Qwen3-Embedding-8B`, but at inference time, query vectors come from `gemini-embedding-001`. These are two independently trained models with no shared embedding space — their cosine similarities are not comparable. The codebase itself acknowledges this: *"Cross-model retrieval is imperfect but functional at demo scale"* (`src/vibescents/engine.py`, line 52).
@@ -61,7 +61,7 @@ top-20 candidates
 Qwen3-VL-Reranker-8B  [GPU]
   └── rerank(image, top-20 fragrances) → top-3 with visual reasoning
         ↓
-SigLIP 2 SO400M  [GPU, already implemented]
+CLIP ViT-B/32  [GPU, already implemented]
   └── formality / season / time classification → structured channel
 ```
 
@@ -77,7 +77,7 @@ Zero API calls at inference. Fully local. Reproducible.
 |-------|------|
 | Qwen3-VL-Embedding-8B | ~16 GB |
 | Qwen3-VL-Reranker-8B | ~16 GB |
-| SigLIP 2 SO400M | ~2 GB |
+| CLIP ViT-B/32 | ~151 MB |
 | **Total** | **~34 GB** |
 
 Any GPU with ≥ 40 GB VRAM satisfies the inference requirement. An A100 40 GB (standard on Colab Pro+) is the minimum. An A100 80 GB or equivalent gives headroom for larger batch sizes during the one-time corpus re-embedding job.
@@ -87,7 +87,7 @@ Any GPU with ≥ 40 GB VRAM satisfies the inference requirement. An A100 40 GB (
 | Task | Type | Estimated time | GPU needed |
 |------|------|----------------|------------|
 | Corpus re-embed with Qwen3-VL-Embedding-8B (35k rows, batch 64) | **One-time offline** | ~8 minutes on A100 | Yes |
-| SigLIP 2 image scoring per request | Per-inference | ~0.2s | Yes |
+| CLIP image scoring per request | Per-inference | ~0.2s | Yes |
 | Qwen3-VL-Embedding query encoding per request | Per-inference | ~0.5s | Yes |
 | Qwen3-VL-Reranker over top-20 candidates | Per-inference | ~1–2s | Yes |
 

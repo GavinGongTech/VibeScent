@@ -192,16 +192,16 @@ Why this is different from the text branch: the joint embedding shifts based on 
 
 **Step 4 — Image Zero-Shot Branch produces scores over enriched corpus.**
 
-The outfit photo is decoded from base64, opened as a PIL RGB image, and processed by `SigLIP2ImageScorer`:
+The outfit photo is decoded from base64, opened as a PIL RGB image, and processed by `CLIPImageScorer`:
 
 ```
-SigLIP2.get_image_features(outfit) → image_embedding  (1, D), L2-normalized
+CLIP.get_image_features(outfit) → image_embedding  (1, D), L2-normalized
 cosine_sim(image_emb, formal_text_embs) → logits → softmax → [0.05, 0.12, 0.83]
 cosine_sim(image_emb, season_text_embs) → logits → softmax → [0.07, 0.04, 0.71, 0.18]
 cosine_sim(image_emb, time_text_embs)   → logits → softmax → [0.15, 0.85]
 ```
 
-SigLIP2 predicts: this outfit is 83% formal, 71% fall-appropriate, 85% evening.
+CLIP predicts: this outfit is 83% formal, 71% fall-appropriate, 85% evening.
 
 For each corpus row, the engine looks up 5 enrichment attributes and computes a joint likelihood score across all 5 heads:
 
@@ -571,10 +571,10 @@ The 9-point gap on MMEB-V2 directly corresponds to cross-modal retrieval quality
 
 **Model:** CLIP ViT-L/14 (`openai/clip-vit-large-patch14`) — zero-shot classifier matching Neil's original `backend/clip_zero_shot.py` approach. No outfit-specific training required.
 
-**Why CLIP ViT-L/14 instead of SigLIP2:**
+**Why CLIP ViT-L/14 instead of CLIP:**
 - Alignment with Neil's work: `CLIPImageScorer` uses the same scoring approach as Neil's backend (`score_classification` with multi-prompt averaging), ensuring consistent behavior across both codepaths.
 - `NeilCNNWrapper` is provided for backward compatibility: if Neil's trained checkpoint is available, it can be loaded and its output is consumed through the same `ImageHeadProbabilities` interface.
-- CLIP ViT-L/14 is GPU-available but also CPU-runnable (slower). The 400 MB model weight advantage of SigLIP2-base is less relevant now that the system runs on A100/L4.
+- CLIP ViT-L/14 is GPU-available but also CPU-runnable (slower). The 400 MB model weight advantage of CLIP-base is less relevant now that the system runs on A100/L4.
 
 **Text prompts per class:** 3 prompts per class, averaged before softmax — this matches Neil's approach and reduces sensitivity to any single prompt phrasing:
 
@@ -1118,7 +1118,7 @@ Every `.npy` artifact has a companion `manifest.json` that stores: model name, c
 | Enriched fragrance embeddings | Harsh | ✓ (notebook Stages 10–14) |
 | Multimodal doc embeddings (Qwen3-VL) | Harsh | ✓ (notebook Stage 17) |
 | RAW vs ENRICHED retrieval comparison | Harsh | ✓ (notebook Stage 15) |
-| Image scoring branch | Neil | Replaced by SigLIP2 zero-shot in production (see `image_scorer.py`) |
+| Image scoring branch | Neil | Replaced by CLIP zero-shot in production (see `image_scoring.py`) |
 | `results/week2_report.md` | Harsh | ✓ |
 
 ### Week 3–4 (completed)
@@ -1126,7 +1126,7 @@ Every `.npy` artifact has a companion `manifest.json` that stores: model name, c
 | Deliverable | Owner | Status |
 |---|---|---|
 | 4-channel `VibeScoreEngine` | Harsh | ✓ `src/vibescents/engine.py` |
-| `SigLIP2ImageScorer` (zero-shot image branch) | Harsh | ✓ `src/vibescents/image_scorer.py` |
+| `CLIPImageScorer` (zero-shot image branch) | Harsh | ✓ `src/vibescents/image_scoring.py` |
 | `compute_structured_scores` (query-aware) | Harsh | ✓ `src/vibescents/structured_scorer.py` |
 | FastAPI ML backend (`/healthz`, `/recommend`) | Harsh | ✓ `src/vibescents/backend_app.py` |
 | SerpAPI pricing scraper + FastAPI wrapper | Harsh | ✓ `src/vibescents/perfume_scraper.py` + `scraper_app.py` |
@@ -1168,7 +1168,7 @@ The weighted sum is also the correct prior when you don't have evidence that the
 Equal weights are the maximally uninformed prior — they assume all signals are equally informative. The heuristic weights express a prior based on signal properties:
 
 - Text (0.30): covers 35,889 fragrances — the only signal with full corpus coverage. High weight because it is the primary retrieval signal for most queries.
-- Image SigLIP2 (0.30): the only signal that reads the outfit's visual attributes explicitly. Equal to text because visual information and textual information are the two primary modalities.
+- Image CLIP (0.30): the only signal that reads the outfit's visual attributes explicitly. Equal to text because visual information and textual information are the two primary modalities.
 - Multimodal (0.25): covers both modalities simultaneously but operates only on 2,000 fragrances and partially overlaps with text. Slightly lower weight to avoid double-counting the text signal that both branches share.
 - Structured (0.15): lowest weight because it only reaches the enriched Tier B corpus (no full-corpus coverage), though the signal is high-quality (ground-truth LLM attribute values, fully query-aware).
 

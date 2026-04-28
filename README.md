@@ -5,7 +5,7 @@ A multimodal fragrance recommendation system that matches outfit images to luxur
 ## Architecture
 
 ```
-Outfit Image ─┬─► SigLIP2 zero-shot classifier ─► formality / season / time attributes
+Outfit Image ─┬─► CLIP zero-shot classifier ─► formality / season / time attributes
                │
                ├─► Qwen3-VL-Embedding-8B (multimodal) ─► joint image+text embedding
                │
@@ -39,7 +39,7 @@ Outfit Image ─┬─► SigLIP2 zero-shot classifier ─► formality / season
 
 - Python 3.11+ (managed via `uv`)
 - Bun (frontend package manager)
-- GPU recommended — 16 GB VRAM for Qwen3-VL text/multimodal channels; CPU fallback runs SigLIP2 + structured channels only
+- GPU recommended — 16 GB VRAM for Qwen3-VL text/multimodal channels; CPU fallback runs CLIP + structured channels only
 
 ### Setup
 
@@ -100,7 +100,7 @@ bun run dev:web
 |---|---|---|---|
 | Text | 0.30 | Qwen3-VL-Embedding-8B | Full corpus (36K) |
 | Multimodal | 0.25 | Qwen3-VL-Embedding-8B | Tier B only (2K enriched) |
-| Image | 0.30 | SigLIP2 (google/siglip2-base-patch16-224) | Tier B only |
+| Image | 0.30 | CLIP (openai/clip-vit-base-patch32) | Tier B only |
 | Structured | 0.15 | Arithmetic (no model) | Tier B only |
 
 Each channel produces a per-fragrance score array. All four are min-max normalized to [0, 1] independently, then combined via weighted sum. Missing channels (e.g. no GPU for Qwen3-VL) are redistributed with pre-tuned fallback weight sets.
@@ -118,7 +118,7 @@ src/vibescents/
   engine.py               # VibeScoreEngine — 4-channel fusion, lazy model loading
   embeddings.py           # Qwen3VLMultimodalEmbedder
   fusion.py               # min_max_normalize + weighted fuse_scores
-  image_scorer.py         # SigLIP2ImageScorer — zero-shot outfit classification
+  image_scoring.py         # CLIPImageScorer — zero-shot outfit classification
   image_scoring.py        # ImageHeadProbabilities dataclass
   structured_scorer.py    # compute_structured_scores — context → attribute → distance
   query.py                # context_to_query_string — expands event/mood/time to rich phrases
