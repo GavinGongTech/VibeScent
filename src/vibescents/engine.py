@@ -7,8 +7,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from vibescents.bm25_scorer import BM25CorpusScorer
 from vibescents.embeddings import Qwen3VLMultimodalEmbedder
-from vibescents.fusion import fuse_scores
+from vibescents.fusion import fuse_scores, min_max_normalize
 from vibescents.image_scoring import (
     CLIPImageScorer,
     GENDER_INDEX,
@@ -16,18 +17,20 @@ from vibescents.image_scoring import (
     ImageHeadProbabilities,
 )
 from vibescents.io_utils import load_embeddings
-from vibescents.query import context_to_query_string
+from vibescents.query import context_to_query_string, build_candidate_text
 from vibescents.schemas import (
     ContextInput,
     FragranceRecommendation,
     RecommendRequest,
     RecommendResponse,
+    RetrievalCandidate,
 )
 from vibescents.settings import Settings
 from vibescents.similarity import (
     cosine_similarity_matrix,
     normalize_rows,
     top_k_indices,
+    mmr_select,
 )
 from vibescents.structured_scorer import compute_structured_scores
 
@@ -74,6 +77,15 @@ class VibeScoreEngine:
         self._clip: CLIPImageScorer | None = None
         self._embedder_lock = threading.Lock()
         self._clip_lock = threading.Lock()
+        self._reranker: object = None
+        self._reranker_lock = threading.Lock()
+        self._bm25: BM25CorpusScorer | None = None
+        self._formality_arr: np.ndarray = pd.to_numeric(
+            corpus_df.get('formality', pd.Series(dtype=float)), errors='coerce'
+        ).fillna(0.5).values
+        self._fresh_warm_arr: np.ndarray = pd.to_numeric(
+            corpus_df.get('fresh_warm', pd.Series(dtype=float)), errors='coerce'
+        ).fillna(0.5).values
 
     @classmethod
     def from_artifacts(
@@ -99,7 +111,20 @@ class VibeScoreEngine:
                 f"Corpus mismatch: {len(embeddings)} embeddings vs {len(df)} metadata rows."
             )
 
-        return cls(corpus_embeddings=embeddings, corpus_df=df, settings=s)
+        _bm25: BM25CorpusScorer | None = None
+        _text_col = next((c for c in ('retrieval_text', 'vibe_sentence', 'name') if c in df.columns), None)
+        if _text_col is not None:
+            try:
+                _texts = df[_text_col].fillna('').astype(str).tolist()
+                _bm25 = BM25CorpusScorer(_texts)
+                if _bm25.available:
+                    logger.info('BM25 index built from %s (%d docs)', _text_col, len(_texts))
+            except Exception as _exc:
+                logger.warning('BM25 index failed: %s', _exc)
+
+        engine = cls(corpus_embeddings=embeddings, corpus_df=df, settings=s)
+        engine._bm25 = _bm25
+        return engine
 
     # ------------------------------------------------------------------
     # Public API
@@ -115,6 +140,7 @@ class VibeScoreEngine:
 
         # Text channel
         text_scores: np.ndarray | None = None
+        q_emb: np.ndarray | None = None
         if embedder is not None:
             try:
                 q_emb = embedder.embed_multimodal_documents([query_str])
@@ -125,6 +151,7 @@ class VibeScoreEngine:
 
         # Multimodal channel — Qwen3-VL-Embedding-8B sees image + context text natively
         multi_scores: np.ndarray | None = None
+        _rerank_image = None
         if embedder is not None and image_bytes:
             try:
                 import os as _os
@@ -141,11 +168,7 @@ class VibeScoreEngine:
                     mm_emb = normalize_rows(mm_emb.astype(np.float32))
                     multi_scores = cosine_similarity_matrix(mm_emb, self._corpus_emb)[0]
                 finally:
-                    if _tmp is not None:
-                        try:
-                            _os.unlink(_tmp)
-                        except OSError:
-                            pass
+                    _rerank_image = _tmp
             except Exception as exc:
                 logger.warning("Multimodal embedding failed, skipping channel: %s", exc)
 
@@ -161,7 +184,36 @@ class VibeScoreEngine:
         structured_scores = compute_structured_scores(request.context, self._corpus_df)
 
         fused = self._fuse(text_scores, multi_scores, image_scores, structured_scores)
-        top3_indices = top_k_indices(fused, 3)
+
+        # Apply hard filter — zero out excluded rows BEFORE top_k selection
+        filter_mask = self._hard_filter(request.context)
+        fused_filtered = fused.copy()
+        fused_filtered[~filter_mask] = 0.0
+
+        if self._bm25 is not None and self._bm25.available:
+            try:
+                bm25_norm = min_max_normalize(self._bm25.score(query_str))
+                fused_filtered = 0.9 * fused_filtered + 0.1 * bm25_norm
+            except Exception as _bm25_exc:
+                logger.warning('BM25 scoring failed: %s', _bm25_exc)
+
+        retrieval_k = min(20, len(self._corpus_df))
+        top_k_arr = top_k_indices(fused_filtered, retrieval_k)
+
+        try:
+            top3_indices = self._try_rerank(top_k_arr, query_str, _rerank_image)
+            if top3_indices is None:
+                if q_emb is not None:
+                    top3_indices = mmr_select(q_emb[0], self._corpus_emb, top_k_arr, top_k=3)
+                else:
+                    top3_indices = top_k_arr[:3]
+        finally:
+            if _rerank_image is not None:
+                try:
+                    import os as _os
+                    _os.unlink(_rerank_image)
+                except OSError:
+                    pass
 
         return self._build_response(top3_indices, fused, request.context)
 
@@ -170,6 +222,57 @@ class VibeScoreEngine:
     # ------------------------------------------------------------------
 
     _EMBEDDER_UNAVAILABLE = object()
+    _RERANKER_UNAVAILABLE = object()
+
+    def _get_reranker(self):
+        if self._reranker is self._RERANKER_UNAVAILABLE:
+            return None
+        if self._reranker is None:
+            with self._reranker_lock:
+                if self._reranker is None:
+                    try:
+                        from vibescents.reranker import Qwen3VLReranker
+                        self._reranker = Qwen3VLReranker(self._settings)
+                        logger.info('Reranker loaded')
+                    except Exception as exc:
+                        logger.warning('Reranker unavailable (%s), falling back to MMR', exc)
+                        self._reranker = self._RERANKER_UNAVAILABLE
+                        return None
+        return self._reranker
+
+    def _hard_filter(self, ctx: ContextInput) -> np.ndarray:
+        mask = np.ones(len(self._corpus_df), dtype=bool)
+        formality = self._formality_arr
+        fresh_warm = self._fresh_warm_arr
+        if ctx.eventType in ('Gala', 'Wedding'):
+            mask &= formality >= 0.3
+        elif ctx.eventType == 'Casual':
+            mask &= formality <= 0.8
+        if ctx.mood == 'Fresh':
+            mask &= fresh_warm <= 0.7
+        elif ctx.mood == 'Warm':
+            mask &= fresh_warm >= 0.3
+        if mask.sum() < 3:
+            return np.ones(len(self._corpus_df), dtype=bool)
+        return mask
+
+    def _try_rerank(self, top_k_arr: np.ndarray, query_str: str, image_path: str | None) -> np.ndarray | None:
+        reranker = self._get_reranker()
+        if reranker is None:
+            return None
+        try:
+            candidates = [
+                RetrievalCandidate(
+                    fragrance_id=str(int(idx)),
+                    retrieval_text=build_candidate_text(self._corpus_df.iloc[int(idx)]),
+                )
+                for idx in top_k_arr
+            ]
+            resp = reranker.rerank(occasion_text=query_str, candidates=candidates, image_path=image_path)
+            return np.array([int(r.fragrance_id) for r in resp.results[:3]], dtype=int)
+        except Exception as exc:
+            logger.warning('Rerank call failed: %s', exc)
+            return None
 
     def _get_embedder(self) -> Qwen3VLMultimodalEmbedder | None:
         if self._embedder is self._EMBEDDER_UNAVAILABLE:

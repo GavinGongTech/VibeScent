@@ -24,6 +24,7 @@ dev = [
   "ruff",
   "httpx",
   "matplotlib",
+  "rank-bm25",
 ]
 gpu = [
   "torch>=2.0.0",

@@ -44,3 +44,45 @@ def majority_vote(values: Sequence[str]) -> str:
 def frequent_items(items: Iterable[Iterable[str]], min_frequency: int = 2) -> list[str]:
     counter = Counter(item for group in items for item in group)
     return sorted(item for item, count in counter.items() if count >= min_frequency)
+
+
+def mmr_select(
+    query_emb: np.ndarray,
+    corpus_emb: np.ndarray,
+    candidate_indices: np.ndarray,
+    *,
+    lambda_param: float = 0.5,
+    top_k: int = 3,
+) -> np.ndarray:
+    if len(candidate_indices) <= top_k:
+        return candidate_indices
+
+    top_k = min(top_k, len(candidate_indices))
+    candidates = corpus_emb[candidate_indices]
+    sim_to_query = candidates @ query_emb
+    candidate_sim_matrix = candidates @ candidates.T
+
+    selected_indices = []
+    remaining_indices = list(range(len(candidate_indices)))
+
+    first_pick = np.argmax(sim_to_query)
+    selected_indices.append(first_pick)
+    remaining_indices.pop(first_pick)
+
+    while len(selected_indices) < top_k:
+        remaining_relevance = sim_to_query[remaining_indices]
+        remaining_sim_to_selected = np.max(
+            candidate_sim_matrix[remaining_indices][:, selected_indices], axis=1
+        )
+        mmr_scores = (
+            lambda_param * remaining_relevance
+            - (1 - lambda_param) * remaining_sim_to_selected
+        )
+
+        best_idx_in_remaining = np.argmax(mmr_scores)
+        best_candidate = remaining_indices[best_idx_in_remaining]
+
+        selected_indices.append(best_candidate)
+        remaining_indices.pop(best_idx_in_remaining)
+
+    return candidate_indices[selected_indices]
