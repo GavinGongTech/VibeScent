@@ -18,6 +18,7 @@ __pycache__/
 artifacts/fragrance_*/embeddings.npy
 artifacts/multimodal_*/doc_embeddings.npy
 artifacts/qwen3vl_corpus/embeddings.npy
+artifacts/minilm_corpus/embeddings.npy
 embeddings/*.npy
 # Allow small artifacts to be committed
 !artifacts/occasions/embeddings.npy
