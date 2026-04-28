@@ -1,10 +1,10 @@
 {
   "scripts": {
-    "dev": "wsl.exe -d Ubuntu -e bash -c 'cd /home/bossman/projects/vibescent && ./start.sh'",
-    "dev:web": "wsl.exe -d Ubuntu -e bash -c 'cd /home/bossman/projects/vibescent && node_modules/.bin/next dev'",
-    "build": "wsl.exe -d Ubuntu -e bash -c 'cd /home/bossman/projects/vibescent && node_modules/.bin/next build'",
-    "start": "wsl.exe -d Ubuntu -e bash -c 'cd /home/bossman/projects/vibescent && node_modules/.bin/next start'",
-    "lint": "wsl.exe -d Ubuntu -e bash -c 'cd /home/bossman/projects/vibescent && node_modules/.bin/eslint .'"
+    "dev": "./start.sh",
+    "dev:web": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.2",

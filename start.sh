@@ -89,7 +89,7 @@ done
 
 # ── Next.js frontend (port 3000) ─────────────────────────────────────────────
 echo "▶ [3/3] Starting Frontend     → http://localhost:3000"
-node_modules/.bin/next dev 2>&1 | stdbuf -oL sed 's/^/  \x1b[35m[frontend]\x1b[0m /' &
+bun run dev:web 2>&1 | stdbuf -oL sed 's/^/  \x1b[35m[frontend]\x1b[0m /' &
 FRONTEND_PID=$!
 
 # ── All services ready ────────────────────────────────────────────────────────
