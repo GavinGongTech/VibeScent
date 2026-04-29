@@ -193,7 +193,28 @@
       "Read(///wsl.localhost/Ubuntu/home/bossman/.nvm/versions/**)",
       "Read(//c/Users/007ha/.nvm/versions/**)",
       "Read(///wsl.localhost/Ubuntu/usr/**)",
-      "Bash(wsl.exe *)"
+      "Bash(wsl.exe *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(export PATH=\"$HOME/.bun/bin:$HOME/.local/bin:$PATH\")",
+      "Bash(export PATH=\"$HOME/.local/bin:$PATH\")",
+      "PowerShell(wsl -u bossman -- bash -lc \"cd /home/bossman/projects/vibescent && ~/.bun/bin/bun run build 2>&1\" 2>&1 | Select-Object -First 100)",
+      "PowerShell(wsl -u bossman -- bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv run python -c 'from vibescents.backend_app import create_configured_app; print\\(\\\\\"backend import OK\\\\\"\\)' 2>&1\")",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv run python -m vibescents.backend_app 2>&1 || true\")",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv run uvicorn vibescents.backend_app:create_configured_app --factory --host 127.0.0.1 --port 8000 --log-level debug 2>&1 &\" ; Start-Sleep 8; wsl -u bossman bash -lc \"curl -sf http://localhost:8000/healthz 2>&1 || echo 'healthz failed'\" 2>&1)",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv run uvicorn vibescents.scraper_app:app --host 127.0.0.1 --port 8001 --log-level warning 2>&1 &\" ; Start-Sleep 5; wsl -u bossman bash -lc \"curl -sf http://localhost:8001/healthz 2>&1 || echo 'scraper healthz failed'\" 2>&1)",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv run pytest tests/ -v --timeout=30 2>&1\")",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv run pytest tests/ -v 2>&1\")",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv run pytest tests/ -v --tb=short 2>&1\")",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv pip list 2>&1 | head -30\" 2>&1)",
+      "PowerShell(wsl -u bossman bash -lc \"ls /home/bossman/projects/vibescent/.venv/lib/ 2>&1 && ls /home/bossman/projects/vibescent/.venv/bin/ 2>&1\" 2>&1)",
+      "PowerShell(wsl -u bossman bash -lc \"ls /home/bossman/projects/vibescent/.venv/bin/ | grep pytest && echo 'pytest in venv' || echo 'pytest NOT in venv'\" 2>&1)",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv sync --extra dev 2>&1\")",
+      "PowerShell(wsl -u bossman bash -lc \"python3 --version && python3.12 --version 2>/dev/null || echo 'no 3.12' && python3.11 --version 2>/dev/null || echo 'no 3.11'\" 2>&1)",
+      "PowerShell(wsl -u bossman bash -lc \"~/.local/bin/uv python list 2>&1\")",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && ~/.local/bin/uv python pin 3.12 2>&1\")",
+      "PowerShell(wsl -u bossman bash -lc \"cd /home/bossman/projects/vibescent && rm -rf .venv && ~/.local/bin/uv sync --extra dev 2>&1\")",
+      "PowerShell(wsl -u bossman bash -lc \"ls -la /home/bossman/projects/vibescent/artifacts/ 2>&1 && ls -la /home/bossman/projects/vibescent/data/ 2>&1\")",
+      "PowerShell(wsl -u bossman bash -lc \"cat /home/bossman/projects/vibescent/.env 2>&1\")"
     ]
   }
 }

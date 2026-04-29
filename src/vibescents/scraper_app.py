@@ -35,21 +35,28 @@ def search(req: SearchRequest) -> list[dict]:
                         "name": req.perfumes[i],
                         "price": "N/A",
                         "store": "Unavailable",
+                        "url": "#",
                         "purchaseUrl": "#",
                         "thumbnail": None,
                         "in_budget": False,
+                        "inBudget": False,
                     }
                 )
             else:
-                # res is list[dict] (top 3 matches) — take the best one
-                best = res[0]
+                # Accept either the normal list[dict] payload or a single dict from tests/mocks.
+                if isinstance(res, dict):
+                    best = res
+                else:
+                    best = next((item for item in res if item), None) or {}
                 clean_results.append({
                     "name": req.perfumes[i],
-                    "price": best.get("price"),
-                    "store": best.get("store", "Amazon"),
+                    "price": best.get("price", "N/A"),
+                    "store": best.get("store", "Unknown Retailer"),
                     "url": best.get("url", "#"),
-                    "thumbnail": best.get("thumbnail"),
-                    "in_budget": best.get("in_budget", True),
+                    "purchaseUrl": best.get("purchaseUrl", best.get("url", "#")),
+                    "thumbnail": best.get("thumbnail") or None,
+                    "in_budget": best.get("in_budget", best.get("inBudget", False)),
+                    "inBudget": best.get("inBudget", best.get("in_budget", False)),
                     "rating": best.get("rating"),
                     "title": best.get("title", ""),
                 })

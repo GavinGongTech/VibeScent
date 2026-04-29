@@ -1,28 +1,63 @@
 import React from "react";
 import type { Metadata } from "next";
-import { Cormorant_Garamond, DM_Sans, DM_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import "../styles/globals.css";
 
 // Configure requested fonts and weights
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
+const cormorant = localFont({
+  src: [
+    {
+      path: "../assets/fonts/cormorant-garamond-300.ttf",
+      weight: "300",
+      style: "normal",
+    },
+    {
+      path: "../assets/fonts/cormorant-garamond-400.ttf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../assets/fonts/cormorant-garamond-500.ttf",
+      weight: "500",
+      style: "normal",
+    },
+  ],
   variable: "--font-cormorant",
   display: "swap",
 });
 
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
+const dmSans = localFont({
+  src: [
+    {
+      path: "../assets/fonts/dm-sans-300.ttf",
+      weight: "300",
+      style: "normal",
+    },
+    {
+      path: "../assets/fonts/dm-sans-400.ttf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../assets/fonts/dm-sans-500.ttf",
+      weight: "500",
+      style: "normal",
+    },
+  ],
   variable: "--font-dm-sans",
   display: "swap",
 });
 
-const dmMono = DM_Mono({
-  subsets: ["latin"],
-  weight: ["400"],
+const dmMono = localFont({
+  src: [
+    {
+      path: "../assets/fonts/dm-mono-400.ttf",
+      weight: "400",
+      style: "normal",
+    },
+  ],
   variable: "--font-dm-mono",
   display: "swap",
 });

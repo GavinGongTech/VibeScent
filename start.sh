@@ -6,6 +6,8 @@ cd "$ROOT"
 
 # ── Ensure bun is on PATH (WSL non-interactive shells don't load ~/.bashrc) ──
 export PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"
+mkdir -p "$UV_CACHE_DIR"
 
 # ── Load environment variables from .env ─────────────────────────────────────
 if [ -f "$ROOT/.env" ]; then

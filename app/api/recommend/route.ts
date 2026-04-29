@@ -22,6 +22,10 @@ function contextToDescription(ctx: RecommendRequest["context"]): string {
   return [ctx.eventType, ctx.timeOfDay, ctx.mood].filter(Boolean).join(", ");
 }
 
+function hasText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 export async function POST(req: NextRequest) {
   let body: RecommendRequest;
   const contentLength = parseInt(req.headers.get('content-length') ?? '0', 10);
@@ -116,16 +120,26 @@ export async function POST(req: NextRequest) {
     // 3. Merge scraper pricing data into ML results
     const finalRecommendations = mlResult.recommendations.map((frag, index) => {
       const scrapedData = scraperResult[index];
+      const rawPrice = scrapedData?.price ?? frag.price;
+      const purchaseUrl =
+        scrapedData?.purchaseUrl ?? scrapedData?.url ?? frag.purchaseUrl ?? "#";
+      const store = scrapedData?.store ?? frag.store ?? "Retailer unavailable";
+      const thumbnail = scrapedData?.thumbnail ?? frag.thumbnail ?? null;
+      const inBudget =
+        scrapedData?.inBudget ?? scrapedData?.in_budget ?? frag.inBudget ?? false;
+
       return {
         ...frag,
         price:
-          typeof scrapedData?.price === "number"
-            ? `$${scrapedData.price.toFixed(2)}`
-            : scrapedData?.price || "Price unavailable",
-        purchaseUrl: scrapedData?.url || "#",
-        store: scrapedData?.store || "Retailer unavailable",
-        thumbnail: scrapedData?.thumbnail || null,
-        inBudget: scrapedData?.in_budget ?? false,
+          typeof rawPrice === "number"
+            ? `$${rawPrice.toFixed(2)}`
+            : hasText(rawPrice)
+              ? rawPrice
+              : "Price unavailable",
+        purchaseUrl: hasText(purchaseUrl) ? purchaseUrl : "#",
+        store: hasText(store) ? store : "Retailer unavailable",
+        thumbnail: hasText(thumbnail) ? thumbnail : null,
+        inBudget: Boolean(inBudget),
       };
     });
 
